@@ -23,14 +23,19 @@ class Bot
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
     private readonly string _csvFilePath = "user_reactions.csv";
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
-    private const int ReactionIncrement = 5; // Configurable increment value
+    private const int ReactionIncrement = 1; // Configurable increment value
 
     public async Task StartAsync()
     {
         _client.Log += LogAsync;
         _client.ReactionAdded += ReactionAddedAsync;
 
-        var token = "TOKEN";
+        var token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
+        if (string.IsNullOrEmpty(token))
+        {
+            throw new InvalidOperationException("DISCORD_BOT_TOKEN environment variable is not set.");
+        }
+
         await _client.LoginAsync(TokenType.Bot, token);
         await _client.StartAsync();
 

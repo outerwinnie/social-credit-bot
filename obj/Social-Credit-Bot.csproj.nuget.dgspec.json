@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Backup\\Projectos\\Bots\\Social-Credit-Bot\\Social-Credit-Bot\\Social-Credit-Bot.csproj": {}
+    "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj": {}
   },
   "projects": {
-    "D:\\Backup\\Projectos\\Bots\\Social-Credit-Bot\\Social-Credit-Bot\\Social-Credit-Bot.csproj": {
+    "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Backup\\Projectos\\Bots\\Social-Credit-Bot\\Social-Credit-Bot\\Social-Credit-Bot.csproj",
+        "projectUniqueName": "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj",
         "projectName": "Social-Credit-Bot",
-        "projectPath": "D:\\Backup\\Projectos\\Bots\\Social-Credit-Bot\\Social-Credit-Bot\\Social-Credit-Bot.csproj",
+        "projectPath": "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj",
         "packagesPath": "C:\\Users\\Winnie\\.nuget\\packages\\",
-        "outputPath": "D:\\Backup\\Projectos\\Bots\\Social-Credit-Bot\\Social-Credit-Bot\\obj\\",
+        "outputPath": "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Winnie\\AppData\\Roaming\\NuGet\\NuGet.Config"
