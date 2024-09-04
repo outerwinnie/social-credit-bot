@@ -52,7 +52,6 @@ class Bot
         LoadData();
 
         Console.WriteLine("Bot is running...");
-        Console.WriteLine(_csvFilePath);
     }
 
     private Task LogAsync(LogMessage log)
