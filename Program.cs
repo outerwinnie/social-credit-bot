@@ -4,6 +4,7 @@ using Discord.WebSocket;
 using CsvHelper;
 using CsvHelper.Configuration;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -47,6 +48,7 @@ class Program
     {
         Console.WriteLine("Bot is connected!");
 
+        // Register the commands with Discord
         await _commands.AddModulesAsync(typeof(Program).Assembly, null);
         await _commands.RegisterCommandsGloballyAsync();
     }
