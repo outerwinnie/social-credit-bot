@@ -87,8 +87,8 @@ class Bot
     {
         var commandBuilder = new SlashCommandBuilder()
             .WithName("ignorar")
-            .WithDescription("Add a user to the ignore list by username.")
-            .AddOption("username", ApplicationCommandOptionType.String, "The username of the user to ignore.", isRequired: true);
+            .WithDescription("Add a user to the ignore list by user ID.")
+            .AddOption("userid", ApplicationCommandOptionType.String, "The user ID of the user to ignore.", isRequired: true);
 
         if (_guildId != 0)
         {
@@ -105,22 +105,16 @@ class Bot
     {
         if (command.CommandName == "ignorar")
         {
-            var username = command.Data.Options.First().Value.ToString();
+            var userIdString = command.Data.Options.First().Value.ToString();
 
-            // Find the user by username
-            var user = _client.Guilds
-                .SelectMany(guild => guild.Users)
-                .FirstOrDefault(u => u.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
-
-            if (user != null)
+            if (ulong.TryParse(userIdString, out var userId))
             {
-                var userId = user.Id;
                 AddIgnoredUser(userId);
-                await command.RespondAsync($"{username} has been added to the ignored users list.");
+                await command.RespondAsync($"User with ID {userId} has been added to the ignored users list.");
             }
             else
             {
-                await command.RespondAsync($"User with username {username} not found.");
+                await command.RespondAsync("Invalid user ID provided.");
             }
         }
     }
