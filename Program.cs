@@ -72,10 +72,21 @@ class Bot
         var messageAuthorId = message.Author.Id;
         var userId = reaction.UserId;
 
+        // Debug log for user ID and ignored list
+        Console.WriteLine($"Received reaction from user ID: {userId}. Ignored users: {string.Join(", ", _ignoredUsers)}");
+
         // Skip if the user is in the ignored list
         if (_ignoredUsers.Contains(userId))
         {
+            Console.WriteLine($"Ignoring reaction from user ID: {userId}");
             return; // Do nothing if the user is on the ignored list
+        }
+
+        // Skip if the message author is in the ignored list
+        if (_ignoredUsers.Contains(messageAuthorId))
+        {
+            Console.WriteLine($"Ignoring reaction to a message by ignored user ID: {messageAuthorId}");
+            return; // Do nothing if the message author is on the ignored list
         }
 
         // Ignore reactions from the message author themselves
@@ -235,18 +246,12 @@ class Bot
                 foreach (var record in records)
                 {
                     _ignoredUsers.Add(record.UserID);
-                    Console.WriteLine($"Loaded ignored user ID: {record.UserID}"); // Debug log
                 }
                 Console.WriteLine("Ignored users loaded from CSV.");
             }
             else
             {
-                // If the CSV file does not exist, create it with headers
-                using var writer = new StreamWriter(_ignoredUsersFilePath);
-                using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
-                csv.WriteField("User ID");
-                csv.NextRecord();
-                Console.WriteLine("New ignored users CSV file created with headers.");
+                Console.WriteLine("Ignored users file not found.");
             }
         }
         catch (Exception ex)
@@ -275,7 +280,7 @@ public sealed class ReactionLogMap : ClassMap<ReactionLog>
     }
 }
 
-// Define a class to represent ignored users
+// Define a class to represent the CSV record for ignored users
 public class IgnoredUser
 {
     public ulong UserID { get; set; }
