@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj": {}
+    "D:\\Winnie\\Documentos\\social-credit-bot\\Social-Credit-Bot.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj": {
+    "D:\\Winnie\\Documentos\\social-credit-bot\\Social-Credit-Bot.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj",
+        "projectUniqueName": "D:\\Winnie\\Documentos\\social-credit-bot\\Social-Credit-Bot.csproj",
         "projectName": "Social-Credit-Bot",
-        "projectPath": "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\Social-Credit-Bot.csproj",
+        "projectPath": "D:\\Winnie\\Documentos\\social-credit-bot\\Social-Credit-Bot.csproj",
         "packagesPath": "C:\\Users\\Winnie\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Winnie\\Desktop\\social-credit-bot\\obj\\",
+        "outputPath": "D:\\Winnie\\Documentos\\social-credit-bot\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Winnie\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -58,17 +58,9 @@
               "target": "Package",
               "version": "[3.15.3, )"
             },
-            "Google.Apis.Auth": {
+            "Microsoft.Extensions.DependencyInjection": {
               "target": "Package",
-              "version": "[1.68.0, )"
-            },
-            "Google.Apis.Drive.v3": {
-              "target": "Package",
-              "version": "[1.68.0.3508, )"
-            },
-            "Google.Apis.OAuth2.v2": {
-              "target": "Package",
-              "version": "[1.68.0.1869, )"
+              "version": "[8.0.0, )"
             },
             "Newtonsoft.Json": {
               "target": "Package",

@@ -2,11 +2,14 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Discord;
+using Discord.Interactions;
 using Discord.WebSocket;
+using Microsoft.Extensions.DependencyInjection;
 
 class Program
 {
@@ -21,6 +24,8 @@ class Program
 class Bot
 {
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
+    private readonly InteractionService _interactionService;
+    private readonly IServiceProvider _services;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
@@ -36,12 +41,20 @@ class Bot
         {
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
         }
+
+        _interactionService = new InteractionService(_client.Rest);
+        _services = new ServiceCollection()
+            .AddSingleton(_client)
+            .AddSingleton(_interactionService)
+            .BuildServiceProvider();
     }
 
     public async Task StartAsync()
     {
         _client.Log += LogAsync;
         _client.ReactionAdded += ReactionAddedAsync;
+        _client.Ready += ReadyAsync;
+        _client.InteractionCreated += InteractionCreated;
 
         var token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
         if (string.IsNullOrEmpty(token))
@@ -63,6 +76,60 @@ class Bot
     {
         Console.WriteLine(log);
         return Task.CompletedTask;
+    }
+
+    private async Task ReadyAsync()
+    {
+        // Register slash commands
+        await RegisterSlashCommands();
+    }
+
+    private async Task RegisterSlashCommands()
+    {
+        var commandService = new SlashCommandBuilder()
+            .WithName("menu")
+            .WithDescription("Shows a dropdown menu");
+
+        var globalCommand = commandService.Build();
+        await _client.Rest.CreateGlobalCommand(globalCommand);
+        Console.WriteLine("Slash command registered.");
+    }
+
+    private async Task InteractionCreated(SocketInteraction interaction)
+    {
+        if (interaction is SocketSlashCommand command)
+        {
+            if (command.Data.Name == "menu")
+            {
+                var menu = new SelectMenuBuilder()
+                    .WithCustomId("select_menu")
+                    .WithPlaceholder("Elige una opcion...")
+                    .AddOption("Canjear una recompensa", "option1")
+                    .AddOption("Credito actual", "option2");
+
+                var message = new ComponentBuilder()
+                    .WithSelectMenu(menu)
+                    .Build();
+
+                // Respond with an ephemeral message
+                await command.RespondAsync("Elija una opcion:", components: message, ephemeral: true);
+            }
+        }
+        else if (interaction is SocketMessageComponent component && component.Data.CustomId == "select_menu")
+        {
+            var selectedOption = component.Data.Values.FirstOrDefault();
+
+            if (selectedOption == "option2")
+            {
+                var userId = component.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                await component.RespondAsync($"Posees {reactionsReceived} creditos.", ephemeral: true);
+            }
+            else
+            {
+                await component.RespondAsync($"Has seleccionado: {selectedOption}", ephemeral: true);
+            }
+        }
     }
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
@@ -242,7 +309,6 @@ class Bot
                 });
                 csv.Context.RegisterClassMap<IgnoredUserMap>();
                 var records = csv.GetRecords<IgnoredUser>();
-                _ignoredUsers.Clear(); // Clear previous data
                 foreach (var record in records)
                 {
                     _ignoredUsers.Add(record.UserID);
@@ -251,13 +317,24 @@ class Bot
             }
             else
             {
-                Console.WriteLine("Ignored users file not found.");
+                // If the ignored users CSV file does not exist, create it with headers
+                using var writer = new StreamWriter(_ignoredUsersFilePath);
+                using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
+                csv.WriteField("User ID");
+                csv.NextRecord();
+                Console.WriteLine("New ignored users CSV file created with headers.");
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading ignored users: {ex.Message}");
         }
+    }
+
+    private int GetUserReactionCount(ulong userId)
+    {
+        _userReactionCounts.TryGetValue(userId, out var reactionCount);
+        return reactionCount;
     }
 }
 
