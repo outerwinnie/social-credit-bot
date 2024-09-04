@@ -231,9 +231,11 @@ class Bot
                 });
                 csv.Context.RegisterClassMap<IgnoredUserMap>();
                 var records = csv.GetRecords<IgnoredUser>();
+                _ignoredUsers.Clear(); // Clear previous data
                 foreach (var record in records)
                 {
                     _ignoredUsers.Add(record.UserID);
+                    Console.WriteLine($"Loaded ignored user ID: {record.UserID}"); // Debug log
                 }
                 Console.WriteLine("Ignored users loaded from CSV.");
             }
