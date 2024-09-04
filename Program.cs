@@ -119,7 +119,7 @@ class Bot
         {
             var selectedOption = component.Data.Values.FirstOrDefault();
 
-            if (selectedOption == "option3")
+            if (selectedOption == "option2")
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
