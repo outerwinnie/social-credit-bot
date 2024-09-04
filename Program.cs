@@ -28,6 +28,7 @@ class Bot
     private readonly IServiceProvider _services;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
+    private readonly string _rewardsFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
@@ -37,6 +38,7 @@ class Bot
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
+        _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
@@ -68,6 +70,7 @@ class Bot
         // Load existing data and ignored users from CSV files
         LoadData();
         LoadIgnoredUsers();
+        CreateRewardsFileIfNotExists();
 
         Console.WriteLine("Bot is running...");
     }
@@ -127,7 +130,7 @@ class Bot
                     var secondMenu = new SelectMenuBuilder()
                         .WithCustomId("second_menu")
                         .WithPlaceholder("Elige una sub-opción...")
-                        .AddOption("Opción A", "sub_option_a")
+                        .AddOption("Roll de Recuerdate", "sub_option_a")
                         .AddOption("Opción B", "sub_option_b");
 
                     var secondMessage = new ComponentBuilder()
@@ -149,15 +152,10 @@ class Bot
                 var secondOption = component.Data.Values.FirstOrDefault();
                 if (secondOption == "sub_option_a")
                 {
-                    // Send a /send command to a specific channel
-                    ulong channelId = 1279137404464140342; // Replace with the target channel ID
-                    var channel = _client.GetChannel(channelId) as ITextChannel;
-                    if (channel != null)
-                    {
-                        // Here we simulate sending the /send command as a message
-                        await channel.SendMessageAsync("/send");
-                    }
-                    await component.RespondAsync("Se ha enviado el comando /send al canal.", ephemeral: true);
+                    // Write to the rewards CSV file
+                    WriteRewardToCsv("recuerdate", 1);
+
+                    await component.RespondAsync("Recompensa 'recuerdate' añadida con cantidad 1.", ephemeral: true);
                 }
                 else if (secondOption == "sub_option_b")
                 {
@@ -366,6 +364,48 @@ class Bot
         }
     }
 
+    private void CreateRewardsFileIfNotExists()
+    {
+        try
+        {
+            if (!File.Exists(_rewardsFilePath))
+            {
+                using var writer = new StreamWriter(_rewardsFilePath);
+                using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
+                csv.WriteField("Reward");
+                csv.WriteField("Quantity");
+                csv.NextRecord();
+                Console.WriteLine("New rewards CSV file created with headers.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating rewards CSV file: {ex.Message}");
+        }
+    }
+
+    private void WriteRewardToCsv(string rewardName, int quantity)
+    {
+        try
+        {
+            using var writer = new StreamWriter(_rewardsFilePath, append: true); // Open in append mode
+            using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
+            csv.Context.RegisterClassMap<RewardMap>();
+            var reward = new Reward
+            {
+                RewardName = rewardName,
+                Quantity = quantity
+            };
+            csv.WriteRecord(reward);
+            csv.NextRecord();
+            Console.WriteLine($"Reward '{rewardName}' with quantity {quantity} written to CSV.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error writing reward to CSV: {ex.Message}");
+        }
+    }
+
     private int GetUserReactionCount(ulong userId)
     {
         _userReactionCounts.TryGetValue(userId, out var reactionCount);
@@ -404,5 +444,22 @@ public sealed class IgnoredUserMap : ClassMap<IgnoredUser>
     public IgnoredUserMap()
     {
         Map(m => m.UserID).Name("User ID");
+    }
+}
+
+// Define a class to represent the CSV record for rewards
+public class Reward
+{
+    public string RewardName { get; set; }
+    public int Quantity { get; set; }
+}
+
+// Define a mapping class to map properties to CSV headers for rewards
+public sealed class RewardMap : ClassMap<Reward>
+{
+    public RewardMap()
+    {
+        Map(m => m.RewardName).Name("Reward");
+        Map(m => m.Quantity).Name("Quantity");
     }
 }
