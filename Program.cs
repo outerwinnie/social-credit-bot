@@ -21,9 +21,19 @@ class Program
 class Bot
 {
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
-    private readonly string _csvFilePath = "user_reactions.csv";
+    private readonly string _csvFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
-    private const int ReactionIncrement = 1; // Configurable increment value
+    private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
+    private readonly int _reactionIncrement;
+
+    public Bot()
+    {
+        _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
+        if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
+        {
+            _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
+        }
+    }
 
     public async Task StartAsync()
     {
@@ -53,30 +63,49 @@ class Bot
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
-        // Retrieve the message and its author from the cache
         var message = await cacheable.GetOrDownloadAsync();
-        var messageAuthorId = message.Author.Id; // Get the message author's ID
+        var messageId = message.Id;
+        var messageAuthorId = message.Author.Id;
+        var userId = reaction.UserId;
 
-        // Update reaction count for the message author
-        lock (_userReactionCounts)
+        // Ignore reactions from the message author themselves
+        if (userId == messageAuthorId)
         {
-            if (_userReactionCounts.ContainsKey(messageAuthorId))
-            {
-                _userReactionCounts[messageAuthorId] += ReactionIncrement; // Use the increment value
-            }
-            else
-            {
-                _userReactionCounts[messageAuthorId] = ReactionIncrement; // Initialize with increment value
-            }
+            return; // Do nothing if the reaction is from the message author
         }
 
-        // Log the reaction
-        var author = _client.GetUser(messageAuthorId) as SocketUser;
-        var authorName = author?.Username ?? "Unknown";
-        Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
+        // Ensure the reaction tracking dictionary is initialized
+        if (!_userMessageReactions.ContainsKey(messageAuthorId))
+        {
+            _userMessageReactions[messageAuthorId] = new HashSet<ulong>();
+        }
 
-        // Save data after updating the reaction count
-        SaveData();
+        lock (_userMessageReactions)
+        {
+            if (!_userMessageReactions[messageAuthorId].Contains(messageId))
+            {
+                // New reaction from this user to this message
+                _userMessageReactions[messageAuthorId].Add(messageId);
+
+                // Update reaction count for the message author
+                if (_userReactionCounts.ContainsKey(messageAuthorId))
+                {
+                    _userReactionCounts[messageAuthorId] += _reactionIncrement;
+                }
+                else
+                {
+                    _userReactionCounts[messageAuthorId] = _reactionIncrement;
+                }
+
+                // Log the reaction
+                var author = _client.GetUser(messageAuthorId) as SocketUser;
+                var authorName = author?.Username ?? "Unknown"; // Fallback if user data is not available
+                Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
+
+                // Save data after updating the reaction count
+                SaveData();
+            }
+        }
     }
 
     private void LoadData()
@@ -153,7 +182,7 @@ class Bot
                     {
                         // Add new record
                         var user = _client.GetUser(kvp.Key) as SocketUser;
-                        var userName = user?.Username ?? "Unknown";
+                        var userName = user?.Username ?? "Unknown"; // Fallback if user data is not available
                         existingData[kvp.Key] = new ReactionLog
                         {
                             UserID = kvp.Key,
