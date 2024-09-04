@@ -103,16 +103,16 @@ class Bot
             {
                 var menu = new SelectMenuBuilder()
                     .WithCustomId("select_menu")
-                    .WithPlaceholder("Choose an option...")
-                    .AddOption("Option 1", "option1")
-                    .AddOption("Option 2", "option2")
-                    .AddOption("Option 3", "option3");
+                    .WithPlaceholder("Elige una opcion...")
+                    .AddOption("Recompensas", "option1")
+                    .AddOption("Credito actual", "option2")
+                    .AddOption("Ignorar", "option3");
 
                 var message = new ComponentBuilder()
                     .WithSelectMenu(menu)
                     .Build();
 
-                await command.RespondAsync("Please select an option from the menu:", components: message);
+                await command.RespondAsync("Elija una opcion:", components: message);
             }
         }
         else if (interaction is SocketMessageComponent component && component.Data.CustomId == "select_menu")
@@ -123,11 +123,11 @@ class Bot
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
-                await component.RespondAsync($"You have received {reactionsReceived} reactions.", ephemeral: true);
+                await component.RespondAsync($"Posees {reactionsReceived} creditos.", ephemeral: true);
             }
             else
             {
-                await component.RespondAsync($"You selected: {selectedOption}", ephemeral: true);
+                await component.RespondAsync($"Has seleccionado: {selectedOption}", ephemeral: true);
             }
         }
     }
