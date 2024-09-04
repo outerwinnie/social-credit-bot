@@ -46,6 +46,18 @@
               "target": "Package",
               "version": "[3.15.3, )"
             },
+            "Discord.Net.Commands": {
+              "target": "Package",
+              "version": "[3.15.3, )"
+            },
+            "Discord.Net.Interactions": {
+              "target": "Package",
+              "version": "[3.15.3, )"
+            },
+            "Discord.Net.Rest": {
+              "target": "Package",
+              "version": "[3.15.3, )"
+            },
             "Google.Apis.Auth": {
               "target": "Package",
               "version": "[1.68.0, )"

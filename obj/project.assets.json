@@ -984,6 +984,9 @@
     "net7.0": [
       "CsvHelper >= 33.0.1",
       "Discord.Net >= 3.15.3",
+      "Discord.Net.Commands >= 3.15.3",
+      "Discord.Net.Interactions >= 3.15.3",
+      "Discord.Net.Rest >= 3.15.3",
       "Google.Apis.Auth >= 1.68.0",
       "Google.Apis.Drive.v3 >= 1.68.0.3508",
       "Google.Apis.OAuth2.v2 >= 1.68.0.1869",
@@ -1032,6 +1035,18 @@
             "version": "[33.0.1, )"
           },
           "Discord.Net": {
+            "target": "Package",
+            "version": "[3.15.3, )"
+          },
+          "Discord.Net.Commands": {
+            "target": "Package",
+            "version": "[3.15.3, )"
+          },
+          "Discord.Net.Interactions": {
+            "target": "Package",
+            "version": "[3.15.3, )"
+          },
+          "Discord.Net.Rest": {
             "target": "Package",
             "version": "[3.15.3, )"
           },
