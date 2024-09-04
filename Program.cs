@@ -23,6 +23,7 @@ class Bot
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
     private readonly string _csvFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
+    private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // New dictionary for tracking
     private readonly int _reactionIncrement;
 
     public Bot()
@@ -62,30 +63,43 @@ class Bot
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
-        // Retrieve the message and its author from the cache
         var message = await cacheable.GetOrDownloadAsync();
-        var messageAuthorId = message.Author.Id; // Get the message author's ID
+        var messageId = message.Id;
+        var messageAuthorId = message.Author.Id;
+        var userId = reaction.UserId;
 
-        // Update reaction count for the message author
-        lock (_userReactionCounts)
+        // Ensure the reaction tracking dictionary is initialized
+        if (!_userMessageReactions.ContainsKey(messageAuthorId))
         {
-            if (_userReactionCounts.ContainsKey(messageAuthorId))
-            {
-                _userReactionCounts[messageAuthorId] += _reactionIncrement; // Use the increment value
-            }
-            else
-            {
-                _userReactionCounts[messageAuthorId] = _reactionIncrement; // Initialize with increment value
-            }
+            _userMessageReactions[messageAuthorId] = new HashSet<ulong>();
         }
 
-        // Log the reaction
-        var author = _client.GetUser(messageAuthorId) as SocketUser;
-        var authorName = author?.Username ?? "Unknown";
-        Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
+        lock (_userMessageReactions)
+        {
+            if (!_userMessageReactions[messageAuthorId].Contains(messageId))
+            {
+                // New reaction from this user to this message
+                _userMessageReactions[messageAuthorId].Add(messageId);
 
-        // Save data after updating the reaction count
-        SaveData();
+                // Update reaction count for the message author
+                if (_userReactionCounts.ContainsKey(messageAuthorId))
+                {
+                    _userReactionCounts[messageAuthorId] += _reactionIncrement;
+                }
+                else
+                {
+                    _userReactionCounts[messageAuthorId] = _reactionIncrement;
+                }
+
+                // Log the reaction
+                var author = _client.GetUser(messageAuthorId) as SocketUser;
+                var authorName = author?.Username ?? "Unknown";
+                Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
+
+                // Save data after updating the reaction count
+                SaveData();
+            }
+        }
     }
 
     private void LoadData()
