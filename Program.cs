@@ -90,16 +90,6 @@ class Bot
             .WithName("menu")
             .WithDescription("Shows a dropdown menu");
 
-        var menu = new SelectMenuBuilder()
-            .WithCustomId("select_menu")
-            .WithPlaceholder("Elige una opcion...")
-            .AddOption("Canjear una recompensas", "option1")
-            .AddOption("Credito actual", "option2");
-
-        var message = new ComponentBuilder()
-            .WithSelectMenu(menu)
-            .Build();
-
         var globalCommand = commandService.Build();
         await _client.Rest.CreateGlobalCommand(globalCommand);
         Console.WriteLine("Slash command registered.");
@@ -114,14 +104,15 @@ class Bot
                 var menu = new SelectMenuBuilder()
                     .WithCustomId("select_menu")
                     .WithPlaceholder("Elige una opcion...")
-                    .AddOption("Canjear una recompensas", "option1")
+                    .AddOption("Canjear una recompensa", "option1")
                     .AddOption("Credito actual", "option2");
 
                 var message = new ComponentBuilder()
                     .WithSelectMenu(menu)
                     .Build();
 
-                await command.RespondAsync("Elija una opcion:", components: message);
+                // Respond with an ephemeral message
+                await command.RespondAsync("Elija una opcion:", components: message, ephemeral: true);
             }
         }
         else if (interaction is SocketMessageComponent component && component.Data.CustomId == "select_menu")
