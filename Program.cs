@@ -118,7 +118,17 @@ class Bot
         else if (interaction is SocketMessageComponent component && component.Data.CustomId == "select_menu")
         {
             var selectedOption = component.Data.Values.FirstOrDefault();
-            await component.RespondAsync($"You selected: {selectedOption}", ephemeral: true);
+
+            if (selectedOption == "option3")
+            {
+                var userId = component.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                await component.RespondAsync($"You have received {reactionsReceived} reactions.", ephemeral: true);
+            }
+            else
+            {
+                await component.RespondAsync($"You selected: {selectedOption}", ephemeral: true);
+            }
         }
     }
 
@@ -319,6 +329,12 @@ class Bot
         {
             Console.WriteLine($"Error loading ignored users: {ex.Message}");
         }
+    }
+
+    private int GetUserReactionCount(ulong userId)
+    {
+        _userReactionCounts.TryGetValue(userId, out var reactionCount);
+        return reactionCount;
     }
 }
 
