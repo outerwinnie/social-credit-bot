@@ -21,9 +21,18 @@ class Program
 class Bot
 {
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
-    private readonly string _csvFilePath = "user_reactions.csv";
+    private readonly string _csvFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
-    private const int ReactionIncrement = 1; // Configurable increment value
+    private readonly int _reactionIncrement;
+
+    public Bot()
+    {
+        _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
+        if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
+        {
+            _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
+        }
+    }
 
     public async Task StartAsync()
     {
@@ -62,11 +71,11 @@ class Bot
         {
             if (_userReactionCounts.ContainsKey(messageAuthorId))
             {
-                _userReactionCounts[messageAuthorId] += ReactionIncrement; // Use the increment value
+                _userReactionCounts[messageAuthorId] += _reactionIncrement; // Use the increment value
             }
             else
             {
-                _userReactionCounts[messageAuthorId] = ReactionIncrement; // Initialize with increment value
+                _userReactionCounts[messageAuthorId] = _reactionIncrement; // Initialize with increment value
             }
         }
 

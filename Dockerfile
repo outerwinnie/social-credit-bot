@@ -23,8 +23,10 @@ WORKDIR /app
 # Copy the built application from the build stage
 COPY --from=build /app/publish .
 
-# Set the environment variable for the bot token
+# Set environment variables with default values
 ENV DISCORD_BOT_TOKEN=""
+ENV CSV_FILE_PATH="/app/user_reactions.csv"
+ENV REACTION_INCREMENT="1"
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]
