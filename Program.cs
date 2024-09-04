@@ -30,13 +30,15 @@ class Bot
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly int _reactionIncrement;
+    private readonly ulong _guildId; // Single guild ID for command registration
 
     public Bot()
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersCsvFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_CSV_PATH") ?? "ignored_users.csv";
         _interactionService = new InteractionService(_client.Rest);
-        
+        _guildId = GetGuildId(); // Get guild ID from environment variable
+
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
@@ -82,18 +84,26 @@ class Bot
 
     private async Task RegisterCommandsAsync()
     {
-        // Create the /noparticipar command
+        // Create the /ignorar command
         var commandBuilder = new SlashCommandBuilder()
-            .WithName("noparticipar")
+            .WithName("ignorar")
             .WithDescription("Opt-out from participating in reaction tracking.");
 
-        await _client.Rest.CreateGlobalCommand(commandBuilder.Build());
-        Console.WriteLine("Slash commands registered.");
+        // Register commands for the specified guild
+        if (_guildId != 0)
+        {
+            await _client.Rest.CreateGuildCommand(commandBuilder.Build(), _guildId);
+            Console.WriteLine($"Slash command registered for guild {_guildId}.");
+        }
+        else
+        {
+            Console.WriteLine("Guild ID is not set. Slash command not registered.");
+        }
     }
 
     private async Task HandleSlashCommandAsync(SocketSlashCommand command)
     {
-        if (command.CommandName == "noparticipar")
+        if (command.CommandName == "ignorar")
         {
             var userId = command.User.Id;
 
@@ -101,6 +111,16 @@ class Bot
             AddIgnoredUser(userId);
             await command.RespondAsync($"{command.User.Username}, you have been added to the ignored users list. You will no longer participate in reaction tracking.");
         }
+    }
+
+    private ulong GetGuildId()
+    {
+        var guildIdString = Environment.GetEnvironmentVariable("GUILD_ID");
+        if (ulong.TryParse(guildIdString, out var guildId))
+        {
+            return guildId;
+        }
+        return 0; // Default to 0 if the environment variable is not set or invalid
     }
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
@@ -150,7 +170,6 @@ class Bot
         }
     }
 
-    // Loads existing reaction data from CSV
     private void LoadData()
     {
         try
@@ -189,89 +208,6 @@ class Bot
         }
     }
 
-    // Loads ignored users from a CSV file
-    private void LoadIgnoredUsers()
-    {
-        try
-        {
-            if (File.Exists(_ignoredUsersCsvFilePath))
-            {
-                using var reader = new StreamReader(_ignoredUsersCsvFilePath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    HeaderValidated = null, // Disable header validation
-                    MissingFieldFound = null // Disable missing field validation
-                });
-                csv.Context.RegisterClassMap<IgnoredUserMap>();
-                var records = csv.GetRecords<IgnoredUser>();
-                foreach (var record in records)
-                {
-                    _ignoredUsers.Add(record.UserID);
-                }
-                Console.WriteLine("Ignored users loaded from CSV.");
-            }
-            else
-            {
-                // If the CSV file does not exist, create it with headers
-                using var writer = new StreamWriter(_ignoredUsersCsvFilePath);
-                using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
-                csv.WriteField("User ID");
-                csv.NextRecord();
-                Console.WriteLine("New ignored users CSV file created with headers.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading ignored users: {ex.Message}");
-        }
-    }
-
-    // Adds a user to the ignored users list and saves it to the CSV file
-    public void AddIgnoredUser(ulong userId)
-    {
-        if (_ignoredUsers.Add(userId))
-        {
-            SaveIgnoredUsers();
-            Console.WriteLine($"User {userId} added to ignored users.");
-        }
-        else
-        {
-            Console.WriteLine($"User {userId} is already in the ignored users list.");
-        }
-    }
-
-    // Removes a user from the ignored users list and saves it to the CSV file
-    public void RemoveIgnoredUser(ulong userId)
-    {
-        if (_ignoredUsers.Remove(userId))
-        {
-            SaveIgnoredUsers();
-            Console.WriteLine($"User {userId} removed from ignored users.");
-        }
-        else
-        {
-            Console.WriteLine($"User {userId} is not in the ignored users list.");
-        }
-    }
-
-    // Saves the ignored users list to a CSV file
-    private void SaveIgnoredUsers()
-    {
-        try
-        {
-            using var writer = new StreamWriter(_ignoredUsersCsvFilePath);
-            using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
-            csv.Context.RegisterClassMap<IgnoredUserMap>();
-            csv.WriteRecords(_ignoredUsers);
-            Console.WriteLine("Ignored users saved to CSV.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error saving ignored users: {ex.Message}");
-        }
-    }
-
-    // Saves reaction data to CSV
     private void SaveData()
     {
         try
@@ -332,6 +268,104 @@ class Bot
             Console.WriteLine($"Error saving data: {ex.Message}");
         }
     }
+
+    private void LoadIgnoredUsers()
+    {
+        try
+        {
+            if (File.Exists(_ignoredUsersCsvFilePath))
+            {
+                using var reader = new StreamReader(_ignoredUsersCsvFilePath);
+                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                {
+                    HeaderValidated = null, // Disable header validation
+                    MissingFieldFound = null // Disable missing field validation
+                });
+                csv.Context.RegisterClassMap<IgnoredUserMap>();
+                var records = csv.GetRecords<IgnoredUser>();
+                foreach (var record in records)
+                {
+                    _ignoredUsers.Add(record.UserID);
+                }
+                Console.WriteLine("Ignored users loaded from CSV.");
+            }
+            else
+            {
+                // If the CSV file does not exist, create it with headers
+                using var writer = new StreamWriter(_ignoredUsersCsvFilePath);
+                using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
+                csv.WriteField("User ID");
+                csv.NextRecord();
+                Console.WriteLine("New ignored users CSV file created with headers.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading ignored users: {ex.Message}");
+        }
+    }
+
+    public void AddIgnoredUser(ulong userId)
+    {
+        if (_ignoredUsers.Add(userId))
+        {
+            SaveIgnoredUsers();
+            Console.WriteLine($"User {userId} added to ignored users.");
+        }
+        else
+        {
+            Console.WriteLine($"User {userId} is already in the ignored users list.");
+        }
+    }
+
+    public void RemoveIgnoredUser(ulong userId)
+    {
+        if (_ignoredUsers.Remove(userId))
+        {
+            SaveIgnoredUsers();
+            Console.WriteLine($"User {userId} removed from ignored users.");
+        }
+        else
+        {
+            Console.WriteLine($"User {userId} is not in the ignored users list.");
+        }
+    }
+
+    private void SaveIgnoredUsers()
+    {
+        try
+        {
+            using var writer = new StreamWriter(_ignoredUsersCsvFilePath);
+            using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
+            csv.WriteField("User ID");
+            csv.NextRecord();
+            foreach (var userId in _ignoredUsers)
+            {
+                csv.WriteField(userId);
+                csv.NextRecord();
+            }
+            Console.WriteLine("Ignored users saved to CSV.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving ignored users: {ex.Message}");
+        }
+    }
+}
+
+// Define a class to represent the CSV record for ignored users
+public class IgnoredUser
+{
+    public ulong UserID { get; set; }
+}
+
+// Define a mapping class to map properties to CSV headers for ignored users
+public sealed class IgnoredUserMap : ClassMap<IgnoredUser>
+{
+    public IgnoredUserMap()
+    {
+        Map(m => m.UserID).Name("User ID");
+    }
 }
 
 // Define a class to represent the CSV record for reactions
@@ -350,20 +384,5 @@ public sealed class ReactionLogMap : ClassMap<ReactionLog>
         Map(m => m.UserID).Name("User ID");
         Map(m => m.UserName).Name("User Name");
         Map(m => m.ReactionsReceived).Name("Reactions Received");
-    }
-}
-
-// Define a class to represent the CSV record for ignored users
-public class IgnoredUser
-{
-    public ulong UserID { get; set; }
-}
-
-// Define a mapping class to map properties to CSV headers for ignored users
-public sealed class IgnoredUserMap : ClassMap<IgnoredUser>
-{
-    public IgnoredUserMap()
-    {
-        Map(m => m.UserID).Name("User ID");
     }
 }
