@@ -9,6 +9,7 @@ using CsvHelper.Configuration;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 class Program
@@ -35,9 +36,13 @@ class Bot
 
     public Bot()
     {
-        _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
-        _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
-        if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+            .Build();
+
+        _csvFilePath = configuration["Discord:CsvFilePath"];
+        _ignoredUsersFilePath = configuration["Discord:IgnoredUsersFilePath"];
+        if (!int.TryParse(configuration["Discord:ReactionIncrement"], out _reactionIncrement))
         {
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
         }
@@ -86,13 +91,20 @@ class Bot
 
     private async Task RegisterSlashCommands()
     {
-        var commandService = new SlashCommandBuilder()
-            .WithName("menu")
-            .WithDescription("Shows a dropdown menu");
+        try
+        {
+            var commandService = new SlashCommandBuilder()
+                .WithName("menu")
+                .WithDescription("Shows a dropdown menu");
 
-        var globalCommand = commandService.Build();
-        await _client.Rest.CreateGlobalCommand(globalCommand);
-        Console.WriteLine("Slash command registered.");
+            var globalCommand = commandService.Build();
+            await _client.Rest.CreateGlobalCommand(globalCommand);
+            Console.WriteLine("Slash command registered.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error registering slash commands: {ex.Message}");
+        }
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
@@ -103,7 +115,7 @@ class Bot
             {
                 var menu = new SelectMenuBuilder()
                     .WithCustomId("select_menu")
-                    .WithPlaceholder("Elige una opcion...")
+                    .WithPlaceholder("Elige una opción...")
                     .AddOption("Canjear una recompensa", "option1")
                     .AddOption("Credito actual", "option2");
 
@@ -112,22 +124,53 @@ class Bot
                     .Build();
 
                 // Respond with an ephemeral message
-                await command.RespondAsync("Elija una opcion:", components: message, ephemeral: true);
+                await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
             }
         }
-        else if (interaction is SocketMessageComponent component && component.Data.CustomId == "select_menu")
+        else if (interaction is SocketMessageComponent component)
         {
-            var selectedOption = component.Data.Values.FirstOrDefault();
+            if (component.Data.CustomId == "select_menu")
+            {
+                var selectedOption = component.Data.Values.FirstOrDefault();
 
-            if (selectedOption == "option2")
-            {
-                var userId = component.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                await component.RespondAsync($"Posees {reactionsReceived} creditos.", ephemeral: true);
-            }
-            else
-            {
-                await component.RespondAsync($"Has seleccionado: {selectedOption}", ephemeral: true);
+                if (selectedOption == "option1")
+                {
+                    // Create and send the second menu when option1 is selected
+                    var secondMenu = new SelectMenuBuilder()
+                        .WithCustomId("second_menu")
+                        .WithPlaceholder("Elige una sub-opción...")
+                        .AddOption("Opción A", "sub_option_a")
+                        .AddOption("Opción B", "sub_option_b");
+
+                    var secondMessage = new ComponentBuilder()
+                        .WithSelectMenu(secondMenu)
+                        .Build();
+
+                    // Respond to the interaction with the second menu
+                    await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
+                }
+                else if (selectedOption == "option2")
+                {
+                    var userId = component.User.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+                }
+                else if (component.Data.CustomId == "second_menu")
+                {
+                    var secondOption = component.Data.Values.FirstOrDefault();
+                    if (secondOption == "sub_option_a")
+                    {
+                        await component.RespondAsync("Seleccionaste Opción A.", ephemeral: true);
+                    }
+                    else if (secondOption == "sub_option_b")
+                    {
+                        await component.RespondAsync("Seleccionaste Opción B.", ephemeral: true);
+                    }
+                }
+                else
+                {
+                    await component.RespondAsync($"Has seleccionado: {selectedOption}", ephemeral: true);
+                }
             }
         }
     }
