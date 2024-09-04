@@ -23,7 +23,7 @@ class Bot
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
     private readonly string _csvFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
-    private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // New dictionary for tracking
+    private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly int _reactionIncrement;
 
     public Bot()
@@ -99,7 +99,7 @@ class Bot
 
                 // Log the reaction
                 var author = _client.GetUser(messageAuthorId) as SocketUser;
-                var authorName = author?.Username ?? "Unknown";
+                var authorName = author?.Username ?? "Unknown"; // Fallback if user data is not available
                 Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
 
                 // Save data after updating the reaction count
@@ -182,7 +182,7 @@ class Bot
                     {
                         // Add new record
                         var user = _client.GetUser(kvp.Key) as SocketUser;
-                        var userName = user?.Username ?? "Unknown";
+                        var userName = user?.Username ?? "Unknown"; // Fallback if user data is not available
                         existingData[kvp.Key] = new ReactionLog
                         {
                             UserID = kvp.Key,
