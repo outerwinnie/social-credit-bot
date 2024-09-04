@@ -7,6 +7,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using Discord;
 using Discord.WebSocket;
+using Discord.Interactions;
 
 class Program
 {
@@ -21,6 +22,8 @@ class Program
 class Bot
 {
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
+    private readonly InteractionService _interactionService;
+    private readonly IServiceProvider _services;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersCsvFilePath;
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Collection for ignored users
@@ -32,6 +35,7 @@ class Bot
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersCsvFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_CSV_PATH") ?? "ignored_users.csv";
+        _interactionService = new InteractionService(_client.Rest);
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -43,6 +47,7 @@ class Bot
     {
         _client.Log += LogAsync;
         _client.ReactionAdded += ReactionAddedAsync;
+        _client.Ready += ReadyAsync;
 
         var token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
         if (string.IsNullOrEmpty(token))
@@ -52,6 +57,9 @@ class Bot
 
         await _client.LoginAsync(TokenType.Bot, token);
         await _client.StartAsync();
+
+        // Register slash commands
+        _client.SlashCommandExecuted += HandleSlashCommandAsync;
 
         // Load existing data from the CSV files
         LoadData();
@@ -64,6 +72,35 @@ class Bot
     {
         Console.WriteLine(log);
         return Task.CompletedTask;
+    }
+
+    private async Task ReadyAsync()
+    {
+        // Register the commands when the bot is ready
+        await RegisterCommandsAsync();
+    }
+
+    private async Task RegisterCommandsAsync()
+    {
+        // Create the /noparticipar command
+        var commandBuilder = new SlashCommandBuilder()
+            .WithName("noparticipar")
+            .WithDescription("Opt-out from participating in reaction tracking.");
+
+        await _client.Rest.CreateGlobalCommand(commandBuilder.Build());
+        Console.WriteLine("Slash commands registered.");
+    }
+
+    private async Task HandleSlashCommandAsync(SocketSlashCommand command)
+    {
+        if (command.CommandName == "noparticipar")
+        {
+            var userId = command.User.Id;
+
+            // Add the user to the ignored list
+            AddIgnoredUser(userId);
+            await command.RespondAsync($"{command.User.Username}, you have been added to the ignored users list. You will no longer participate in reaction tracking.");
+        }
     }
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
