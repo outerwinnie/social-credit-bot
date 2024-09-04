@@ -92,9 +92,9 @@ class Bot
 
         var menu = new SelectMenuBuilder()
             .WithCustomId("select_menu")
-            .WithPlaceholder("Choose an option...")
-            .AddOption("Option 1", "option1")
-            .AddOption("Option 2", "option2");
+            .WithPlaceholder("Elige una opcion...")
+            .AddOption("Canjear una recompensas", "option1")
+            .AddOption("Credito actual", "option2");
 
         var message = new ComponentBuilder()
             .WithSelectMenu(menu)
@@ -113,21 +113,31 @@ class Bot
             {
                 var menu = new SelectMenuBuilder()
                     .WithCustomId("select_menu")
-                    .WithPlaceholder("Choose an option...")
-                    .AddOption("Option 1", "option1")
-                    .AddOption("Option 2", "option2");
+                    .WithPlaceholder("Elige una opcion...")
+                    .AddOption("Canjear una recompensas", "option1")
+                    .AddOption("Credito actual", "option2");
 
                 var message = new ComponentBuilder()
                     .WithSelectMenu(menu)
                     .Build();
 
-                await command.RespondAsync("Please select an option from the menu:", components: message);
+                await command.RespondAsync("Elija una opcion:", components: message);
             }
         }
         else if (interaction is SocketMessageComponent component && component.Data.CustomId == "select_menu")
         {
             var selectedOption = component.Data.Values.FirstOrDefault();
-            await component.RespondAsync($"You selected: {selectedOption}", ephemeral: true);
+
+            if (selectedOption == "option2")
+            {
+                var userId = component.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                await component.RespondAsync($"Posees {reactionsReceived} creditos.", ephemeral: true);
+            }
+            else
+            {
+                await component.RespondAsync($"Has seleccionado: {selectedOption}", ephemeral: true);
+            }
         }
     }
 
