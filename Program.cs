@@ -120,19 +120,9 @@ class Bot
             }
             else
             {
-                await command.RespondAsync($"User with username '{username}' not found.");
+                await command.RespondAsync($"User with username {username} not found.");
             }
         }
-    }
-
-    private ulong GetGuildId()
-    {
-        var guildIdString = Environment.GetEnvironmentVariable("GUILD_ID");
-        if (ulong.TryParse(guildIdString, out var guildId))
-        {
-            return guildId;
-        }
-        return 0; // Default to 0 if the environment variable is not set or invalid
     }
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
@@ -142,10 +132,16 @@ class Bot
         var messageAuthorId = message.Author.Id;
         var userId = reaction.UserId;
 
-        // Ignore reactions from the message author themselves or from ignored users
-        if (userId == messageAuthorId || _ignoredUsers.Contains(userId))
+        // Ignore reactions from the ignored users
+        if (_ignoredUsers.Contains(userId))
         {
-            return; // Do nothing if the reaction is from the message author or an ignored user
+            return;
+        }
+
+        // Ignore reactions from the message author themselves
+        if (userId == messageAuthorId)
+        {
+            return; // Do nothing if the reaction is from the message author
         }
 
         // Ensure the reaction tracking dictionary is initialized
@@ -293,6 +289,7 @@ class Bot
                     HeaderValidated = null, // Disable header validation
                     MissingFieldFound = null // Disable missing field validation
                 });
+                csv.Context.RegisterClassMap<IgnoredUserMap>();
                 var records = csv.GetRecords<IgnoredUser>();
                 foreach (var record in records)
                 {
@@ -305,6 +302,7 @@ class Bot
                 // Create the ignored users file if it does not exist
                 using var writer = new StreamWriter(_ignoredUsersCsvFilePath);
                 using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
+                csv.Context.RegisterClassMap<IgnoredUserMap>();
                 csv.WriteField("User ID");
                 csv.NextRecord();
                 Console.WriteLine("New ignored users CSV file created with headers.");
@@ -322,6 +320,7 @@ class Bot
         {
             using var writer = new StreamWriter(_ignoredUsersCsvFilePath);
             using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
+            csvWriter.Context.RegisterClassMap<IgnoredUserMap>();
             csvWriter.WriteRecords(_ignoredUsers.Select(id => new IgnoredUser { UserID = id }));
             Console.WriteLine("Ignored users saved to CSV.");
         }
@@ -337,6 +336,12 @@ class Bot
         {
             SaveIgnoredUsers(); // Save the updated ignored users list
         }
+    }
+
+    private ulong GetGuildId()
+    {
+        var guildIdString = Environment.GetEnvironmentVariable("GUILD_ID");
+        return ulong.TryParse(guildIdString, out var guildId) ? guildId : 0;
     }
 }
 
