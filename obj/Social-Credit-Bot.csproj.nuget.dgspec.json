@@ -58,17 +58,9 @@
               "target": "Package",
               "version": "[3.15.3, )"
             },
-            "Google.Apis.Auth": {
+            "Microsoft.Extensions.DependencyInjection": {
               "target": "Package",
-              "version": "[1.68.0, )"
-            },
-            "Google.Apis.Drive.v3": {
-              "target": "Package",
-              "version": "[1.68.0.3508, )"
-            },
-            "Google.Apis.OAuth2.v2": {
-              "target": "Package",
-              "version": "[1.68.0.1869, )"
+              "version": "[8.0.0, )"
             },
             "Newtonsoft.Json": {
               "target": "Package",
