@@ -9,7 +9,6 @@ using CsvHelper.Configuration;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 class Program
@@ -36,13 +35,9 @@ class Bot
 
     public Bot()
     {
-        var configuration = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-            .Build();
-
-        _csvFilePath = configuration["Discord:CsvFilePath"];
-        _ignoredUsersFilePath = configuration["Discord:IgnoredUsersFilePath"];
-        if (!int.TryParse(configuration["Discord:ReactionIncrement"], out _reactionIncrement))
+        _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
+        _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
+        if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
         }
@@ -91,20 +86,13 @@ class Bot
 
     private async Task RegisterSlashCommands()
     {
-        try
-        {
-            var commandService = new SlashCommandBuilder()
-                .WithName("menu")
-                .WithDescription("Shows a dropdown menu");
+        var commandService = new SlashCommandBuilder()
+            .WithName("menu")
+            .WithDescription("Shows a dropdown menu");
 
-            var globalCommand = commandService.Build();
-            await _client.Rest.CreateGlobalCommand(globalCommand);
-            Console.WriteLine("Slash command registered.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error registering slash commands: {ex.Message}");
-        }
+        var globalCommand = commandService.Build();
+        await _client.Rest.CreateGlobalCommand(globalCommand);
+        Console.WriteLine("Slash command registered.");
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
@@ -155,21 +143,25 @@ class Bot
                     var reactionsReceived = GetUserReactionCount(userId);
                     await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
                 }
-                else if (component.Data.CustomId == "second_menu")
+            }
+            else if (component.Data.CustomId == "second_menu")
+            {
+                var secondOption = component.Data.Values.FirstOrDefault();
+                if (secondOption == "sub_option_a")
                 {
-                    var secondOption = component.Data.Values.FirstOrDefault();
-                    if (secondOption == "sub_option_a")
+                    // Send a /send command to a specific channel
+                    ulong channelId = 1279137404464140342; // Replace with the target channel ID
+                    var channel = _client.GetChannel(channelId) as ITextChannel;
+                    if (channel != null)
                     {
-                        await component.RespondAsync("Seleccionaste Opción A.", ephemeral: true);
+                        // Here we simulate sending the /send command as a message
+                        await channel.SendMessageAsync("/send");
                     }
-                    else if (secondOption == "sub_option_b")
-                    {
-                        await component.RespondAsync("Seleccionaste Opción B.", ephemeral: true);
-                    }
+                    await component.RespondAsync("Se ha enviado el comando /send al canal.", ephemeral: true);
                 }
-                else
+                else if (secondOption == "sub_option_b")
                 {
-                    await component.RespondAsync($"Has seleccionado: {selectedOption}", ephemeral: true);
+                    await component.RespondAsync("Seleccionaste Opción B.", ephemeral: true);
                 }
             }
         }
