@@ -68,6 +68,12 @@ class Bot
         var messageAuthorId = message.Author.Id;
         var userId = reaction.UserId;
 
+        // Ignore reactions from the message author themselves
+        if (userId == messageAuthorId)
+        {
+            return; // Do nothing if the reaction is from the message author
+        }
+
         // Ensure the reaction tracking dictionary is initialized
         if (!_userMessageReactions.ContainsKey(messageAuthorId))
         {
