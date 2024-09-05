@@ -140,7 +140,7 @@ class Bot
                 var secondMenu = new SelectMenuBuilder()
                     .WithCustomId("second_menu")
                     .WithPlaceholder("Elige una sub-opción...")
-                    .AddOption("Roll de Recuerdate", "sub_option_a");
+                    .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
 
                 var secondMessage = new ComponentBuilder()
                     .WithSelectMenu(secondMenu)
