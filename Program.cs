@@ -51,8 +51,6 @@ class Bot
             _recuerdatePrice = 5; // Default value if the environment variable is not set or invalid
         }
 
-        Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
-
         _interactionService = new InteractionService(_client.Rest);
         _services = new ServiceCollection()
             .AddSingleton(_client)
@@ -82,6 +80,9 @@ class Bot
         CreateRewardsFileIfNotExists();
 
         Console.WriteLine("Bot is running...");
+        Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
+        Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
+
     }
 
     private Task LogAsync(LogMessage log)
