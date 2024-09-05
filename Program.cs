@@ -366,12 +366,12 @@ class Bot
             var existingReward = rewards.FirstOrDefault(r => r.RewardName == rewardName);
             if (existingReward != null)
             {
-                // If the reward exists, update its quantity
+                // If the reward exists, update its quantity by adding the provided quantity
                 existingReward.Quantity += quantity;
             }
             else
             {
-                // If the reward doesn't exist, add a new one
+                // If the reward doesn't exist, add a new one with the provided quantity
                 rewards.Add(new Reward
                 {
                     RewardName = rewardName,
@@ -385,7 +385,7 @@ class Bot
             csvWriter.Context.RegisterClassMap<RewardMap>();
             csvWriter.WriteRecords(rewards); // Overwrite the file with the updated rewards list
 
-            Console.WriteLine($"Reward '{rewardName}' with quantity {quantity} updated in CSV.");
+            Console.WriteLine($"Reward '{rewardName}' updated in CSV. New quantity: {existingReward?.Quantity ?? quantity}");
         }
         catch (Exception ex)
         {
