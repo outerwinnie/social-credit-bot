@@ -337,22 +337,28 @@ class Bot
     }
 
     private void LoadIgnoredUsers()
+{
+    try
     {
-        try
+        if (!File.Exists(_ignoredUsersFilePath))
         {
-            if (File.Exists(_ignoredUsersFilePath))
-            {
-                using var reader = new StreamReader(_ignoredUsersFilePath);
-                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-                _ignoredUsers.UnionWith(csvReader.GetRecords<ulong>());
-                Console.WriteLine($"Loaded {_ignoredUsers.Count} ignored users.");
-            }
+            // Create the file if it doesn't exist
+            using var writer = new StreamWriter(_ignoredUsersFilePath);
+            writer.WriteLine("User ID"); // Write a header
+            Console.WriteLine("Ignored users CSV file created.");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading ignored users: {ex.Message}");
-        }
+
+        // Load ignored users from the file
+        using var reader = new StreamReader(_ignoredUsersFilePath);
+        using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
+        _ignoredUsers.UnionWith(csvReader.GetRecords<ulong>());
+        Console.WriteLine($"Loaded {_ignoredUsers.Count} ignored users.");
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error loading ignored users: {ex.Message}");
+    }
+}
 
     private void CreateRewardsFileIfNotExists()
     {
