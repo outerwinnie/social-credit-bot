@@ -350,6 +350,7 @@ class Bot
     private class ReactionLog
     {
         public ulong UserID { get; set; }
+        public string UserName { get; set; }
         public int ReactionsReceived { get; set; }
     }
 
@@ -357,8 +358,24 @@ class Bot
     {
         public ReactionLogMap()
         {
-            Map(m => m.UserID).Name("UserID");
-            Map(m => m.ReactionsReceived).Name("ReactionsReceived");
+            Map(m => m.UserID).Name("User ID");
+            Map(m => m.UserID).Name("User ID");
+            Map(m => m.ReactionsReceived).Name("Reactions Received");
         }
+    }
+
+    // Define a class to represent the CSV record for ignored users
+    public class IgnoredUser
+    {
+        public ulong UserID { get; set; }
+    }
+
+    // Define a mapping class to map properties to CSV headers for ignored users
+    public sealed class IgnoredUserMap : ClassMap<IgnoredUser>
+    {
+    public IgnoredUserMap()
+    {
+        Map(m => m.UserID).Name("User ID");
+    }
     }
 }
