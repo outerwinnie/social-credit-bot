@@ -162,6 +162,10 @@ class Bot
             var secondOption = component.Data.Values.FirstOrDefault();
             if (secondOption == "sub_option_a")
             {
+
+                //Load updated count of the CSV file.
+                LoadData();
+
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
                 if (reactionsReceived >= _recuerdatePrice)
