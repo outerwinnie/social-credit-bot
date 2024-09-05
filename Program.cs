@@ -109,79 +109,88 @@ class Bot
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
+{
+    if (interaction is SocketSlashCommand command)
     {
-        if (interaction is SocketSlashCommand command)
+        if (command.Data.Name == "menu")
         {
-            if (command.Data.Name == "menu")
-            {
-                var menu = new SelectMenuBuilder()
-                    .WithCustomId("select_menu")
-                    .WithPlaceholder("Elige una opción...")
-                    .AddOption("Canjear una recompensa", "option1")
-                    .AddOption("Credito actual", "option2");
+            var menu = new SelectMenuBuilder()
+                .WithCustomId("select_menu")
+                .WithPlaceholder("Elige una opción...")
+                .AddOption("Canjear una recompensa", "option1")
+                .AddOption("Credito actual", "option2");
 
-                var message = new ComponentBuilder()
-                    .WithSelectMenu(menu)
+            var message = new ComponentBuilder()
+                .WithSelectMenu(menu)
+                .Build();
+
+            // Respond with an ephemeral message
+            await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
+        }
+    }
+    else if (interaction is SocketMessageComponent component)
+    {
+        if (component.Data.CustomId == "select_menu")
+        {
+            var selectedOption = component.Data.Values.FirstOrDefault();
+
+            if (selectedOption == "option1")
+            {
+                // Create and send the second menu when option1 is selected
+                var secondMenu = new SelectMenuBuilder()
+                    .WithCustomId("second_menu")
+                    .WithPlaceholder("Elige una sub-opción...")
+                    .AddOption("Roll de Recuerdate", "sub_option_a")
+                    .AddOption("Opción B", "sub_option_b");
+
+                var secondMessage = new ComponentBuilder()
+                    .WithSelectMenu(secondMenu)
                     .Build();
 
-                // Respond with an ephemeral message
-                await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
+                // Respond to the interaction with the second menu
+                await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
+            }
+            else if (selectedOption == "option2")
+            {
+                var userId = component.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
         }
-        else if (interaction is SocketMessageComponent component)
+        else if (component.Data.CustomId == "second_menu")
         {
-            if (component.Data.CustomId == "select_menu")
+            var secondOption = component.Data.Values.FirstOrDefault();
+            if (secondOption == "sub_option_a")
             {
-                var selectedOption = component.Data.Values.FirstOrDefault();
-
-                if (selectedOption == "option1")
+                var userId = component.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                if (reactionsReceived >= _recuerdatePrice)
                 {
-                    // Create and send the second menu when option1 is selected
-                    var secondMenu = new SelectMenuBuilder()
-                        .WithCustomId("second_menu")
-                        .WithPlaceholder("Elige una sub-opción...")
-                        .AddOption("Roll de Recuerdate", "sub_option_a")
-                        .AddOption("Opción B", "sub_option_b");
-
-                    var secondMessage = new ComponentBuilder()
-                        .WithSelectMenu(secondMenu)
-                        .Build();
-
-                    // Respond to the interaction with the second menu
-                    await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
+                    // Subtract the _recuerdatePrice from reactionsReceived
+                    reactionsReceived -= _recuerdatePrice;
+                    
+                    // Update the reaction count
+                    _userReactionCounts[userId] = reactionsReceived;
+                    
+                    // Write the updated count to the CSV file
+                    SaveData();
+                    
+                    // Respond to the interaction
+                    await component.RespondAsync("Recompensa 'recuerdate' añadida. Nuevos créditos: " + reactionsReceived, ephemeral: true);
                 }
-                else if (selectedOption == "option2")
+                else
                 {
-                    var userId = component.User.Id;
-                    var reactionsReceived = GetUserReactionCount(userId);
-                    await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+                    await component.RespondAsync($"No tienes suficientes reacciones. Necesitas {_recuerdatePrice} reacciones.", ephemeral: true);
                 }
             }
-            else if (component.Data.CustomId == "second_menu")
+            else if (secondOption == "sub_option_b")
             {
-                var secondOption = component.Data.Values.FirstOrDefault();
-                if (secondOption == "sub_option_a")
-                {
-                    var userId = component.User.Id;
-                    var reactionsReceived = GetUserReactionCount(userId);
-                    if (reactionsReceived >= _recuerdatePrice)
-                    {
-                        // Write to the rewards CSV file
-                        WriteRewardToCsv("recuerdate", 1);
-                        await component.RespondAsync("Recompensa 'recuerdate' añadida con cantidad 1.", ephemeral: true);
-                    }
-                    else
-                    {
-                        await component.RespondAsync($"No tienes suficientes reacciones. Necesitas {_recuerdatePrice} reacciones.", ephemeral: true);
-                    }
-                }
-                else if (secondOption == "sub_option_b")
-                {
-                    await component.RespondAsync("Seleccionaste Opción B.", ephemeral: true);
-                }
+                await component.RespondAsync("Seleccionaste Opción B.", ephemeral: true);
             }
         }
     }
+}
+
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
