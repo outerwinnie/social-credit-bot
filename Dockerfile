@@ -28,6 +28,7 @@ ENV DISCORD_BOT_TOKEN=""
 ENV CSV_FILE_PATH="/app/user_reactions.csv"
 ENV REACTION_INCREMENT="1"
 ENV IGNORED_USERS_FILE_PATH="/app/ignored_users.csv"
+ENV RECUERDATE_PRICE="15"
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]
