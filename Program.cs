@@ -101,7 +101,7 @@ class Bot
     {
         var commandService = new SlashCommandBuilder()
             .WithName("menu")
-            .WithDescription("Shows a dropdown menu");
+            .WithDescription("Abre el menu");
 
         var globalCommand = commandService.Build();
         await _client.Rest.CreateGlobalCommand(globalCommand);
@@ -140,8 +140,7 @@ class Bot
                 var secondMenu = new SelectMenuBuilder()
                     .WithCustomId("second_menu")
                     .WithPlaceholder("Elige una sub-opción...")
-                    .AddOption("Roll de Recuerdate", "sub_option_a")
-                    .AddOption("Opción B", "sub_option_b");
+                    .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
 
                 var secondMessage = new ComponentBuilder()
                     .WithSelectMenu(secondMenu)
@@ -183,16 +182,12 @@ class Bot
                     WriteRewardToCsv("recuerdate", 1);
                     
                     // Respond to the interaction
-                    await component.RespondAsync("Recompensa 'recuerdate' añadida. Nuevos créditos: " + reactionsReceived, ephemeral: true);
+                    await component.RespondAsync("Añadida una nueva imagena a la cola, se enviara en los proximos 5 minutos. Créditos restantes: " + reactionsReceived, ephemeral: true);
                 }
                 else
                 {
-                    await component.RespondAsync($"No tienes suficientes reacciones. Necesitas {_recuerdatePrice} reacciones.", ephemeral: true);
+                    await component.RespondAsync($"No tienes suficiente credito social. Necesitas {_recuerdatePrice} creditos.", ephemeral: true);
                 }
-            }
-            else if (secondOption == "sub_option_b")
-            {
-                await component.RespondAsync("Seleccionaste Opción B.", ephemeral: true);
             }
         }
     }
