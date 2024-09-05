@@ -178,6 +178,9 @@ class Bot
                     
                     // Write the updated count to the CSV file
                     SaveData();
+
+                    //Write the added reward to the CSV file
+                    WriteRewardToCsv("recuerdate", 1);
                     
                     // Respond to the interaction
                     await component.RespondAsync("Recompensa 'recuerdate' añadida. Nuevos créditos: " + reactionsReceived, ephemeral: true);
