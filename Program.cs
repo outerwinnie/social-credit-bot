@@ -33,15 +33,22 @@ class Bot
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
     private readonly int _reactionIncrement;
+    private readonly int _reactionThreshold; // Reaction threshold from environment variable
 
     public Bot()
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_THRESHOLD"), out _reactionThreshold))
+        {
+            _reactionThreshold = 5; // Default value if the environment variable is not set or invalid
         }
 
         _interactionService = new InteractionService(_client.Rest);
@@ -152,10 +159,18 @@ class Bot
                 var secondOption = component.Data.Values.FirstOrDefault();
                 if (secondOption == "sub_option_a")
                 {
-                    // Write to the rewards CSV file
-                    WriteRewardToCsv("recuerdate", 1);
-
-                    await component.RespondAsync("Recompensa 'recuerdate' añadida con cantidad 1.", ephemeral: true);
+                    var userId = component.User.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    if (reactionsReceived >= _reactionThreshold)
+                    {
+                        // Write to the rewards CSV file
+                        WriteRewardToCsv("recuerdate", 1);
+                        await component.RespondAsync("Recompensa 'recuerdate' añadida con cantidad 1.", ephemeral: true);
+                    }
+                    else
+                    {
+                        await component.RespondAsync($"No tienes suficientes reacciones. Necesitas {_reactionThreshold} reacciones.", ephemeral: true);
+                    }
                 }
                 else if (secondOption == "sub_option_b")
                 {
@@ -231,13 +246,13 @@ class Bot
             if (File.Exists(_csvFilePath))
             {
                 using var reader = new StreamReader(_csvFilePath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
                 {
-                    HeaderValidated = null, 
-                    MissingFieldFound = null 
+                    HeaderValidated = null,
+                    MissingFieldFound = null
                 });
-                csv.Context.RegisterClassMap<ReactionLogMap>();
-                var records = csv.GetRecords<ReactionLog>();
+                csvReader.Context.RegisterClassMap<ReactionLogMap>();
+                var records = csvReader.GetRecords<ReactionLog>();
                 foreach (var record in records)
                 {
                     _userReactionCounts[record.UserID] = record.ReactionsReceived;
@@ -247,11 +262,11 @@ class Bot
             else
             {
                 using var writer = new StreamWriter(_csvFilePath);
-                using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
-                csv.WriteField("User ID");
-                csv.WriteField("User Name");
-                csv.WriteField("Reactions Received");
-                csv.NextRecord();
+                using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
+                csvWriter.WriteField("User ID");
+                csvWriter.WriteField("User Name");
+                csvWriter.WriteField("Reactions Received");
+                csvWriter.NextRecord();
                 Console.WriteLine("New CSV file created with headers.");
             }
         }
@@ -269,21 +284,18 @@ class Bot
             if (File.Exists(_csvFilePath))
             {
                 using var reader = new StreamReader(_csvFilePath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
                 {
-                    HeaderValidated = null, 
-                    MissingFieldFound = null 
+                    HeaderValidated = null,
+                    MissingFieldFound = null
                 });
-                csv.Context.RegisterClassMap<ReactionLogMap>();
-                var records = csv.GetRecords<ReactionLog>();
-                foreach (var record in records)
-                {
-                    existingData[record.UserID] = record;
-                }
+                csvReader.Context.RegisterClassMap<ReactionLogMap>();
+                var records = csvReader.GetRecords<ReactionLog>();
+                existingData = records.ToDictionary(r => r.UserID);
             }
 
             using var writer = new StreamWriter(_csvFilePath);
-            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
+            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
             csvWriter.Context.RegisterClassMap<ReactionLogMap>();
             csvWriter.WriteHeader<ReactionLog>();
             csvWriter.NextRecord();
@@ -308,6 +320,7 @@ class Bot
                 csvWriter.WriteRecord(record);
                 csvWriter.NextRecord();
             }
+            Console.WriteLine("Data saved to CSV.");
         }
         catch (Exception ex)
         {
@@ -327,8 +340,8 @@ class Bot
             if (File.Exists(_ignoredUsersFilePath))
             {
                 using var reader = new StreamReader(_ignoredUsersFilePath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-                _ignoredUsers.UnionWith(csv.GetRecords<ulong>());
+                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
+                _ignoredUsers.UnionWith(csvReader.GetRecords<ulong>());
                 Console.WriteLine($"Loaded {_ignoredUsers.Count} ignored users.");
             }
         }
@@ -352,26 +365,22 @@ class Bot
     {
         try
         {
-            // Read the existing rewards from the CSV file
             var rewards = new List<Reward>();
             if (File.Exists(_rewardsFilePath))
             {
                 using var reader = new StreamReader(_rewardsFilePath);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-                csv.Context.RegisterClassMap<RewardMap>();
-                rewards = csv.GetRecords<Reward>().ToList();
+                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
+                csvReader.Context.RegisterClassMap<RewardMap>();
+                rewards = csvReader.GetRecords<Reward>().ToList();
             }
 
-            // Check if the reward already exists
             var existingReward = rewards.FirstOrDefault(r => r.RewardName == rewardName);
             if (existingReward != null)
             {
-                // If the reward exists, update its quantity by adding the provided quantity
                 existingReward.Quantity += quantity;
             }
             else
             {
-                // If the reward doesn't exist, add a new one with the provided quantity
                 rewards.Add(new Reward
                 {
                     RewardName = rewardName,
@@ -379,11 +388,10 @@ class Bot
                 });
             }
 
-            // Write the updated list of rewards back to the CSV file
             using var writer = new StreamWriter(_rewardsFilePath);
             using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
             csvWriter.Context.RegisterClassMap<RewardMap>();
-            csvWriter.WriteRecords(rewards); // Overwrite the file with the updated rewards list
+            csvWriter.WriteRecords(rewards);
 
             Console.WriteLine($"Reward '{rewardName}' updated in CSV. New quantity: {existingReward?.Quantity ?? quantity}");
         }
