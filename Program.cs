@@ -421,17 +421,36 @@ class RewardMap : ClassMap<Reward>
     }
 }
 
-class ReactionLog
+// Define a class to represent the CSV record for reactions
+public class ReactionLog
 {
     public ulong UserID { get; set; }
+    public string UserName { get; set; }
     public int ReactionsReceived { get; set; }
 }
 
-class ReactionLogMap : ClassMap<ReactionLog>
+// Define a mapping class to map properties to CSV headers for reactions
+public sealed class ReactionLogMap : ClassMap<ReactionLog>
 {
     public ReactionLogMap()
     {
         Map(m => m.UserID).Name("User ID");
+        Map(m => m.UserName).Name("User Name");
         Map(m => m.ReactionsReceived).Name("Reactions Received");
+    }
+}
+
+// Define a class to represent the CSV record for ignored users
+public class IgnoredUser
+{
+    public ulong UserID { get; set; }
+}
+
+// Define a mapping class to map properties to CSV headers for ignored users
+public sealed class IgnoredUserMap : ClassMap<IgnoredUser>
+{
+    public IgnoredUserMap()
+    {
+        Map(m => m.UserID).Name("User ID");
     }
 }
