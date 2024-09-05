@@ -33,7 +33,7 @@ class Bot
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
     private readonly int _reactionIncrement;
-    private readonly int _reactionThreshold; // Reaction threshold from environment variable
+    private readonly int _recuerdatePrice; // Reaction threshold from environment variable
 
     public Bot()
     {
@@ -46,10 +46,12 @@ class Bot
             _reactionIncrement = 1; // Default value if the environment variable is not set or invalid
         }
 
-        if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_THRESHOLD"), out _reactionThreshold))
+        if (!int.TryParse(Environment.GetEnvironmentVariable("RECUERDATE_PRICE"), out _recuerdatePrice))
         {
-            _reactionThreshold = 5; // Default value if the environment variable is not set or invalid
+            _recuerdatePrice = 5; // Default value if the environment variable is not set or invalid
         }
+
+        Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
 
         _interactionService = new InteractionService(_client.Rest);
         _services = new ServiceCollection()
@@ -161,7 +163,7 @@ class Bot
                 {
                     var userId = component.User.Id;
                     var reactionsReceived = GetUserReactionCount(userId);
-                    if (reactionsReceived >= _reactionThreshold)
+                    if (reactionsReceived >= _recuerdatePrice)
                     {
                         // Write to the rewards CSV file
                         WriteRewardToCsv("recuerdate", 1);
@@ -169,7 +171,7 @@ class Bot
                     }
                     else
                     {
-                        await component.RespondAsync($"No tienes suficientes reacciones. Necesitas {_reactionThreshold} reacciones.", ephemeral: true);
+                        await component.RespondAsync($"No tienes suficientes reacciones. Necesitas {_recuerdatePrice} reacciones.", ephemeral: true);
                     }
                 }
                 else if (secondOption == "sub_option_b")
