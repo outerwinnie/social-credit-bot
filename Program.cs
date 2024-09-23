@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿﻿﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -183,6 +183,21 @@ class Bot
                     
                     // Respond to the interaction
                     await component.RespondAsync("Añadida una nueva imagena a la cola, se enviara en los proximos 5 minutos. Créditos restantes: " + reactionsReceived, ephemeral: true);
+                    
+                    // Sending a message to a specific channel
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (targetChannel != null)
+                    {
+                    // Sending a message to the specific channel and tagging the user
+                    var userMention = component.User.Mention; // This will mention the user who used the option
+                    await targetChannel.SendMessageAsync($"{userMention} ha canjeado una nueva recompensa 'Recuerdate' por { _recuerdatePrice} créditos.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+                    }
                 }
                 else
                 {
