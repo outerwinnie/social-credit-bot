@@ -82,7 +82,6 @@ class Bot
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
-
     }
 
     private Task LogAsync(LogMessage log)
@@ -109,90 +108,104 @@ class Bot
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
-{
-    if (interaction is SocketSlashCommand command)
     {
-        if (command.Data.Name == "menu")
+        if (interaction is SocketSlashCommand command)
         {
-            var menu = new SelectMenuBuilder()
-                .WithCustomId("select_menu")
-                .WithPlaceholder("Elige una opción...")
-                .AddOption("Canjear una recompensa", "option1")
-                .AddOption("Credito actual", "option2");
-
-            var message = new ComponentBuilder()
-                .WithSelectMenu(menu)
-                .Build();
-
-            // Respond with an ephemeral message
-            await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
-        }
-    }
-    else if (interaction is SocketMessageComponent component)
-    {
-        if (component.Data.CustomId == "select_menu")
-        {
-            var selectedOption = component.Data.Values.FirstOrDefault();
-
-            if (selectedOption == "option1")
+            if (command.Data.Name == "menu")
             {
-                // Create and send the second menu when option1 is selected
-                var secondMenu = new SelectMenuBuilder()
-                    .WithCustomId("second_menu")
-                    .WithPlaceholder("Elige una sub-opción...")
-                    .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
+                var menu = new SelectMenuBuilder()
+                    .WithCustomId("select_menu")
+                    .WithPlaceholder("Elige una opción...")
+                    .AddOption("Canjear una recompensa", "option1")
+                    .AddOption("Credito actual", "option2");
 
-                var secondMessage = new ComponentBuilder()
-                    .WithSelectMenu(secondMenu)
+                var message = new ComponentBuilder()
+                    .WithSelectMenu(menu)
                     .Build();
 
-                // Respond to the interaction with the second menu
-                await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
-            }
-            else if (selectedOption == "option2")
-            {
-                var userId = component.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+                // Respond with an ephemeral message
+                await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
             }
         }
-        else if (component.Data.CustomId == "second_menu")
+        else if (interaction is SocketMessageComponent component)
         {
-            var secondOption = component.Data.Values.FirstOrDefault();
-            if (secondOption == "sub_option_a")
+            if (component.Data.CustomId == "select_menu")
             {
+                var selectedOption = component.Data.Values.FirstOrDefault();
 
-                //Load updated count of the CSV file.
-                LoadData();
-
-                var userId = component.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                if (reactionsReceived >= _recuerdatePrice)
+                if (selectedOption == "option1")
                 {
-                    // Subtract the _recuerdatePrice from reactionsReceived
-                    reactionsReceived -= _recuerdatePrice;
-                    
-                    // Update the reaction count
-                    _userReactionCounts[userId] = reactionsReceived;
-                    
-                    // Write the updated count to the CSV file
-                    SaveData();
+                    // Create and send the second menu when option1 is selected
+                    var secondMenu = new SelectMenuBuilder()
+                        .WithCustomId("second_menu")
+                        .WithPlaceholder("Elige una sub-opción...")
+                        .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
 
-                    //Write the added reward to the CSV file
-                    WriteRewardToCsv("recuerdate", 1);
-                    
-                    // Respond to the interaction
-                    await component.RespondAsync("Añadida una nueva imagena a la cola, se enviara en los proximos 5 minutos. Créditos restantes: " + reactionsReceived, ephemeral: true);
+                    var secondMessage = new ComponentBuilder()
+                        .WithSelectMenu(secondMenu)
+                        .Build();
+
+                    // Respond to the interaction with the second menu
+                    await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
                 }
-                else
+                else if (selectedOption == "option2")
                 {
-                    await component.RespondAsync($"No tienes suficiente credito social. Necesitas {_recuerdatePrice} creditos.", ephemeral: true);
+                    var userId = component.User.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+                }
+            }
+            else if (component.Data.CustomId == "second_menu")
+            {
+                var secondOption = component.Data.Values.FirstOrDefault();
+                if (secondOption == "sub_option_a")
+                {
+                    // Load updated count of the CSV file.
+                    LoadData();
+
+                    var userId = component.User.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+
+                    if (reactionsReceived >= _recuerdatePrice)
+                    {
+                        // Subtract the _recuerdatePrice from reactionsReceived
+                        reactionsReceived -= _recuerdatePrice;
+
+                        // Update the reaction count
+                        _userReactionCounts[userId] = reactionsReceived;
+
+                        // Write the updated count to the CSV file
+                        SaveData();
+
+                        // Write the added reward to the CSV file
+                        WriteRewardToCsv("recuerdate", 1);
+
+                        // Respond to the interaction
+                        await component.RespondAsync("Añadida una nueva imagen a la cola, se enviará en los próximos 5 minutos. Créditos restantes: " + reactionsReceived, ephemeral: true);
+
+                        // Sending a message to a specific channel
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                        if (targetChannel != null)
+                        {
+                            // Sending a message to the specific channel and tagging the user
+                            var userMention = component.User.Mention; // This will mention the user who used the option
+                            await targetChannel.SendMessageAsync($"{userMention} ha canjeado una nueva recompensa 'Recuerdate' por {_recuerdatePrice} créditos.");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+                        }
+                    }
+                    else
+                    {
+                        await component.RespondAsync($"No tienes suficiente crédito social. Necesitas {_recuerdatePrice} créditos.", ephemeral: true);
+                    }
                 }
             }
         }
     }
-}
-
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
@@ -259,29 +272,15 @@ class Bot
         {
             if (File.Exists(_csvFilePath))
             {
-                using var reader = new StreamReader(_csvFilePath);
-                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+                using (var reader = new StreamReader(_csvFilePath))
+                using (var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)))
                 {
-                    HeaderValidated = null,
-                    MissingFieldFound = null
-                });
-                csvReader.Context.RegisterClassMap<ReactionLogMap>();
-                var records = csvReader.GetRecords<ReactionLog>();
-                foreach (var record in records)
-                {
-                    _userReactionCounts[record.UserID] = record.ReactionsReceived;
+                    var records = csv.GetRecords<UserReactionRecord>().ToList();
+                    foreach (var record in records)
+                    {
+                        _userReactionCounts[record.UserId] = record.ReactionCount;
+                    }
                 }
-                Console.WriteLine("Data loaded from CSV.");
-            }
-            else
-            {
-                using var writer = new StreamWriter(_csvFilePath);
-                using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
-                csvWriter.WriteField("User ID");
-                csvWriter.WriteField("User Name");
-                csvWriter.WriteField("Reactions Received");
-                csvWriter.NextRecord();
-                Console.WriteLine("New CSV file created with headers.");
             }
         }
         catch (Exception ex)
@@ -294,47 +293,12 @@ class Bot
     {
         try
         {
-            var existingData = new Dictionary<ulong, ReactionLog>();
-            if (File.Exists(_csvFilePath))
+            using (var writer = new StreamWriter(_csvFilePath))
+            using (var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture)))
             {
-                using var reader = new StreamReader(_csvFilePath);
-                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    HeaderValidated = null,
-                    MissingFieldFound = null
-                });
-                csvReader.Context.RegisterClassMap<ReactionLogMap>();
-                var records = csvReader.GetRecords<ReactionLog>();
-                existingData = records.ToDictionary(r => r.UserID);
+                var records = _userReactionCounts.Select(kv => new UserReactionRecord { UserId = kv.Key, ReactionCount = kv.Value }).ToList();
+                csv.WriteRecords(records);
             }
-
-            using var writer = new StreamWriter(_csvFilePath);
-            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = true });
-            csvWriter.Context.RegisterClassMap<ReactionLogMap>();
-            csvWriter.WriteHeader<ReactionLog>();
-            csvWriter.NextRecord();
-
-            foreach (var userReaction in _userReactionCounts)
-            {
-                var record = new ReactionLog
-                {
-                    UserID = userReaction.Key,
-                    ReactionsReceived = userReaction.Value,
-                };
-
-                if (existingData.ContainsKey(userReaction.Key))
-                {
-                    existingData[userReaction.Key] = record;
-                }
-                else
-                {
-                    existingData.Add(userReaction.Key, record);
-                }
-
-                csvWriter.WriteRecord(record);
-                csvWriter.NextRecord();
-            }
-            Console.WriteLine("Data saved to CSV.");
         }
         catch (Exception ex)
         {
@@ -347,127 +311,88 @@ class Bot
         return _userReactionCounts.ContainsKey(userId) ? _userReactionCounts[userId] : 0;
     }
 
-    private void LoadIgnoredUsers()
-{
-    try
-    {
-        if (!File.Exists(_ignoredUsersFilePath))
-        {
-            // Create the file if it doesn't exist
-            using var writer = new StreamWriter(_ignoredUsersFilePath);
-            writer.WriteLine("User ID"); // Write a header
-            Console.WriteLine("Ignored users CSV file created.");
-        }
-
-        // Load ignored users from the file
-        using var reader = new StreamReader(_ignoredUsersFilePath);
-        using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-        _ignoredUsers.UnionWith(csvReader.GetRecords<ulong>());
-        Console.WriteLine($"Loaded {_ignoredUsers.Count} ignored users.");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error loading ignored users: {ex.Message}");
-    }
-}
-
-    private void CreateRewardsFileIfNotExists()
-    {
-        if (!File.Exists(_rewardsFilePath))
-        {
-            using var writer = new StreamWriter(_rewardsFilePath);
-            writer.WriteLine("RewardName,Quantity");
-            Console.WriteLine("Rewards CSV file created.");
-        }
-    }
-
-    private void WriteRewardToCsv(string rewardName, int quantity)
+    private void WriteRewardToCsv(string rewardType, int quantity)
     {
         try
         {
-            var rewards = new List<Reward>();
-            if (File.Exists(_rewardsFilePath))
+            using (var writer = new StreamWriter(_rewardsFilePath, append: true))
+            using (var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture)))
             {
-                using var reader = new StreamReader(_rewardsFilePath);
-                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-                csvReader.Context.RegisterClassMap<RewardMap>();
-                rewards = csvReader.GetRecords<Reward>().ToList();
-            }
-
-            var existingReward = rewards.FirstOrDefault(r => r.RewardName == rewardName);
-            if (existingReward != null)
-            {
-                existingReward.Quantity += quantity;
-            }
-            else
-            {
-                rewards.Add(new Reward
+                var rewardRecord = new RewardRecord
                 {
-                    RewardName = rewardName,
-                    Quantity = quantity
-                });
+                    RewardType = rewardType,
+                    Quantity = quantity,
+                    DateAdded = DateTime.UtcNow
+                };
+
+                csv.WriteRecord(rewardRecord);
+                csv.NextRecord(); 
             }
-
-            using var writer = new StreamWriter(_rewardsFilePath);
-            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
-            csvWriter.Context.RegisterClassMap<RewardMap>();
-            csvWriter.WriteRecords(rewards);
-
-            Console.WriteLine($"Reward '{rewardName}' updated in CSV. New quantity: {existingReward?.Quantity ?? quantity}");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error writing reward to CSV: {ex.Message}");
         }
     }
-}
 
-// Helper classes and mappings
-class Reward
-{
-    public string RewardName { get; set; }
-    public int Quantity { get; set; }
-}
-
-class RewardMap : ClassMap<Reward>
-{
-    public RewardMap()
+    private void LoadIgnoredUsers()
     {
-        Map(m => m.RewardName).Name("RewardName");
-        Map(m => m.Quantity).Name("Quantity");
+        try
+        {
+            if (File.Exists(_ignoredUsersFilePath))
+            {
+                using (var reader = new StreamReader(_ignoredUsersFilePath))
+                using (var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)))
+                {
+                    var records = csv.GetRecords<IgnoredUserRecord>().ToList();
+                    foreach (var record in records)
+                    {
+                        _ignoredUsers.Add(record.UserId);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading ignored users: {ex.Message}");
+        }
     }
-}
 
-// Define a class to represent the CSV record for reactions
-public class ReactionLog
-{
-    public ulong UserID { get; set; }
-    public string UserName { get; set; }
-    public int ReactionsReceived { get; set; }
-}
-
-// Define a mapping class to map properties to CSV headers for reactions
-public sealed class ReactionLogMap : ClassMap<ReactionLog>
-{
-    public ReactionLogMap()
+    private void CreateRewardsFileIfNotExists()
     {
-        Map(m => m.UserID).Name("User ID");
-        Map(m => m.UserName).Name("User Name");
-        Map(m => m.ReactionsReceived).Name("Reactions Received");
+        try
+        {
+            if (!File.Exists(_rewardsFilePath))
+            {
+                using (var writer = new StreamWriter(_rewardsFilePath))
+                using (var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture)))
+                {
+                    csv.WriteHeader<RewardRecord>();
+                    csv.NextRecord(); 
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating rewards file: {ex.Message}");
+        }
     }
-}
 
-// Define a class to represent the CSV record for ignored users
-public class IgnoredUser
-{
-    public ulong UserID { get; set; }
-}
-
-// Define a mapping class to map properties to CSV headers for ignored users
-public sealed class IgnoredUserMap : ClassMap<IgnoredUser>
-{
-    public IgnoredUserMap()
+    private class UserReactionRecord
     {
-        Map(m => m.UserID).Name("User ID");
+        public ulong UserId { get; set; }
+        public int ReactionCount { get; set; }
+    }
+
+    private class RewardRecord
+    {
+        public string RewardType { get; set; }
+        public int Quantity { get; set; }
+        public DateTime DateAdded { get; set; }
+    }
+
+    private class IgnoredUserRecord
+    {
+        public ulong UserId { get; set; }
     }
 }
