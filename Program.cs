@@ -307,7 +307,6 @@ class Bot
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
-                RedistributeWealth(50);
                 await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
         }
