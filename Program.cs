@@ -161,11 +161,12 @@ class Bot
             if (userOption != null && amountOption != null)
             {
                 ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
-                int amount = (int)amountOption.Value;
-
+                int amount = Convert.ToInt32((int)amountOption.Value);
+                
                 if (userId != 0)
                 {
                     LoadData();
+                    
                     // Add credits to the user
                     if (!_userReactionCounts.ContainsKey(userId))
                     {
@@ -268,8 +269,6 @@ class Bot
         }
     }
 }
-
-
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
         var message = await cacheable.GetOrDownloadAsync();
