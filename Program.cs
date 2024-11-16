@@ -152,10 +152,9 @@ class Bot
                 DateTime nextRun = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59);
 
                 TimeSpan waitTime = nextRun - now;
+                Console.WriteLine($"{waitTime}%");
                 await Task.Delay(waitTime);
                 
-                Console.WriteLine($"{waitTime}%");
-
                 RedistributeWealth(percentage);
             }
         });
