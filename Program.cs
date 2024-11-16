@@ -233,17 +233,17 @@ class Bot
                 {
                     LoadData();
                     
-                    // Add credits to the user
+                    // Discount credits to the user
                     if (!_userReactionCounts.ContainsKey(userId))
                     {
                         _userReactionCounts[userId] = 0;
                     }
 
-                    _userReactionCounts[userId] += amount;
+                    _userReactionCounts[userId] -= amount;
                     SaveData(); // Save updated data to CSV
 
                     // Send a confirmation message
-                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: true);
+                    await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: true);
                 }
                 else
                 {
