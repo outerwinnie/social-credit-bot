@@ -281,6 +281,7 @@ class Bot
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
+                RedistributeWealth(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE")));
                 await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
         }
@@ -335,6 +336,57 @@ class Bot
         }
     }
 }
+    
+    private void RedistributeWealth(decimal percentage)
+    {
+        if (percentage <= 0 || percentage > 100)
+        {
+            Console.WriteLine("Invalid percentage. Please provide a value between 0 and 100.");
+            return;
+        }
+
+        if (_userReactionCounts.Count < 2)
+        {
+            Console.WriteLine("Not enough users to redistribute wealth.");
+            return;
+        }
+
+        LoadData();
+        
+        // Find the wealthiest user
+        var wealthiestUser = _userReactionCounts.OrderByDescending(kvp => kvp.Value).First();
+        ulong wealthiestUserId = wealthiestUser.Key;
+        int wealthiestUserCredits = wealthiestUser.Value;
+
+        // Calculate the amount to redistribute
+        int amountToRedistribute = (int)(wealthiestUserCredits * (percentage / 100m));
+        if (amountToRedistribute <= 0)
+        {
+            Console.WriteLine("Redistribution amount is too small to be meaningful.");
+            return;
+        }
+
+        // Deduct the amount from the wealthiest user
+        _userReactionCounts[wealthiestUserId] -= amountToRedistribute;
+
+        // Calculate the amount each other user receives
+        int numberOfRecipients = _userReactionCounts.Count - 1;
+        int amountPerUser = amountToRedistribute / numberOfRecipients;
+
+        foreach (var userId in _userReactionCounts.Keys.ToList())
+        {
+            if (userId != wealthiestUserId)
+            {
+                _userReactionCounts[userId] += amountPerUser;
+            }
+        }
+
+        // Save the updated data to the CSV
+        SaveData();
+
+        Console.WriteLine($"Redistributed {amountToRedistribute} credits from user {wealthiestUserId}. Each of the other {numberOfRecipients} users received {amountPerUser} credits.");
+    }
+    
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
         var message = await cacheable.GetOrDownloadAsync();
