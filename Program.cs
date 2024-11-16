@@ -29,12 +29,14 @@ class Bot
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
     private readonly int _reactionIncrement;
     private readonly int _recuerdatePrice; // Reaction threshold from environment variable
+    private readonly ulong guildID;
 
     public Bot()
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+        guildID = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID"));
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -122,6 +124,9 @@ class Bot
         var addCreditsGlobalCommand = addCreditsCommand.Build();
         await _client.Rest.CreateGlobalCommand(addCreditsGlobalCommand);
         Console.WriteLine("Slash command 'añadir' registered.");
+        var addCreditsGuildCommand = addCreditsCommand.Build();
+        await _client.Rest.CreateGuildCommand(addCreditsGuildCommand, guildID);
+        Console.WriteLine("Slash command 'descontar' registered for the guild.");
         
         var removeCreditsCommand = new SlashCommandBuilder()
             .WithName("descontar")
@@ -140,6 +145,9 @@ class Bot
         var removeCreditsGlobalCommand = removeCreditsCommand.Build();
         await _client.Rest.CreateGlobalCommand(removeCreditsGlobalCommand);
         Console.WriteLine("Slash command 'descontar' registered.");
+        var removeCreditsGuildCommand = removeCreditsCommand.Build();
+        await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, guildID);
+        Console.WriteLine("Slash command 'descontar' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)

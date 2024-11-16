@@ -32,6 +32,7 @@ ENV RECUERDATE_PRICE="15"
 ENV TARGET_CHANNEL_ID=""
 ENV ADMIN_USER_ID=""
 ENV CREDIT_PERCENTAGE="50"
+ENV GUILD_ID=""
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]
