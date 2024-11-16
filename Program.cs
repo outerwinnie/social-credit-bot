@@ -1,9 +1,4 @@
-﻿﻿﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Discord;
@@ -102,6 +97,20 @@ class Bot
         var commandService = new SlashCommandBuilder()
             .WithName("menu")
             .WithDescription("Abre el menu");
+        
+        var addCreditsCommand = new SlashCommandBuilder()
+            .WithName("añadir")
+            .WithDescription("Añade créditos a un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("ID del usuario al que añadir créditos")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a añadir")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
 
         var globalCommand = commandService.Build();
         await _client.Rest.CreateGlobalCommand(globalCommand);
@@ -114,6 +123,18 @@ class Bot
     {
         if (command.Data.Name == "menu")
         {
+            
+            // Define the authorized user ID (replace with the actual user ID)
+            ulong authorizedUserId = 154537457008902144; // Replace with the actual Discord user ID of the authorized user
+
+            // Check if the user invoking the command is authorized
+            if (command.User.Id != authorizedUserId)
+            {
+                // Respond with an error message if the user is not authorized
+                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                return;
+            }
+            
             var menu = new SelectMenuBuilder()
                 .WithCustomId("select_menu")
                 .WithPlaceholder("Elige una opción...")
@@ -126,6 +147,42 @@ class Bot
 
             // Respond with an ephemeral message
             await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
+        }
+        
+        else if (command.Data.Name == "añadir")
+        {
+            var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+            var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+            if (userOption != null && amountOption != null)
+            {
+                ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+                int amount = (int)amountOption.Value;
+
+                if (userId != 0)
+                {
+                    LoadData();
+                    // Add credits to the user
+                    if (!_userReactionCounts.ContainsKey(userId))
+                    {
+                        _userReactionCounts[userId] = 0;
+                    }
+
+                    _userReactionCounts[userId] += amount;
+                    SaveData(); // Save updated data to CSV
+
+                    // Send a confirmation message
+                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: true);
+                }
+                else
+                {
+                    await command.RespondAsync("Usuario no válido.", ephemeral: true);
+                }
+            }
+            else
+            {
+                await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+            }
         }
     }
     else if (interaction is SocketMessageComponent component)
