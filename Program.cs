@@ -78,8 +78,8 @@ class Bot
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
-        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CURRENCY_PERCENTAGE") ?? throw new InvalidOperationException()));
-        Console.WriteLine(int.Parse(Environment.GetEnvironmentVariable("CURRENCY_PERCENTAGE")));
+        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
+        Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE")));
 
     }
 

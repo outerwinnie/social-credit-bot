@@ -31,7 +31,7 @@ ENV IGNORED_USERS_FILE_PATH="/app/ignored_users.csv"
 ENV RECUERDATE_PRICE="15"
 ENV TARGET_CHANNEL_ID=""
 ENV ADMIN_USER_ID=""
-ENV CURRENCY_PERCENTAGE="50"
+ENV CREDIT_PERCENTAGE="50"
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]
