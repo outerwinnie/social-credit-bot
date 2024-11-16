@@ -77,6 +77,8 @@ class Bot
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
+        
+        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CURRENCY_PERCENTAGE")));
 
     }
 
@@ -137,6 +139,25 @@ class Bot
         var removeCreditsGlobalCommand = removeCreditsCommand.Build();
         await _client.Rest.CreateGlobalCommand(removeCreditsGlobalCommand);
         Console.WriteLine("Slash command 'descontar' registered.");
+    }
+    
+    private void ScheduleMonthlyRedistribution(decimal percentage)
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                DateTime now = DateTime.Now;
+                DateTime nextRun = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59);
+
+                TimeSpan waitTime = nextRun - now;
+                await Task.Delay(waitTime);
+                
+                Console.WriteLine($"{waitTime}%");
+
+                RedistributeWealth(percentage);
+            }
+        });
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
@@ -281,7 +302,6 @@ class Bot
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
-                RedistributeWealth(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE")));
                 await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
         }
