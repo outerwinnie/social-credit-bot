@@ -79,7 +79,7 @@ class Bot
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
-        Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE")));
+        Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
 
     }
 
@@ -302,6 +302,7 @@ class Bot
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
+                RedistributeWealth(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
                 await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
         }
