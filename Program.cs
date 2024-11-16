@@ -403,6 +403,20 @@ class Bot
 
         // Save the updated data to the CSV
         SaveData();
+        
+        // Sending a message to a specific channel
+        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+        if (targetChannel != null)
+        {
+            // Sending a message to the specific channel and tagging the user
+            targetChannel.SendMessageAsync("A");
+        }
+        else
+        {
+            Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+        }
 
         Console.WriteLine($"Redistributed {amountToRedistribute} credits from user {wealthiestUserId}. Each of the other {numberOfRecipients} users received {amountPerUser} credits.");
     }
