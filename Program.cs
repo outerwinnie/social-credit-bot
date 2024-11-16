@@ -412,7 +412,7 @@ class Bot
         if (targetChannel != null)
         {
             // Sending a message to the specific channel and tagging the user
-            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario {wealthiestUserId}. Cada usuario recibira {amountPerUser} creditos.");
+            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} creditos.");
         }
         else
         {
