@@ -161,7 +161,7 @@ class Bot
             if (userOption != null && amountOption != null)
             {
                 ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
-                int amount = Convert.ToInt32((int)amountOption.Value);
+                int amount = Convert.ToInt32(amountOption.Value);
                 
                 if (userId != 0)
                 {
