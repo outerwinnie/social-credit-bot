@@ -1,9 +1,4 @@
-﻿﻿﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Discord;
@@ -34,12 +29,17 @@ class Bot
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
     private readonly int _reactionIncrement;
     private readonly int _recuerdatePrice; // Reaction threshold from environment variable
+    private readonly ulong _guildId;
+    private readonly ulong _adminId;
 
     public Bot()
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+        _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
+        _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
+
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -82,6 +82,9 @@ class Bot
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
+        
+        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
+        Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
 
     }
 
@@ -102,10 +105,64 @@ class Bot
         var commandService = new SlashCommandBuilder()
             .WithName("menu")
             .WithDescription("Abre el menu");
-
+        
         var globalCommand = commandService.Build();
         await _client.Rest.CreateGlobalCommand(globalCommand);
         Console.WriteLine("Slash command registered.");
+        
+        var addCreditsCommand = new SlashCommandBuilder()
+            .WithName("añadir")
+            .WithDescription("Añade créditos a un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("ID del usuario al que añadir créditos")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a añadir")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var addCreditsGuildCommand = addCreditsCommand.Build();
+        await _client.Rest.CreateGuildCommand(addCreditsGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        
+        var removeCreditsCommand = new SlashCommandBuilder()
+            .WithName("descontar")
+            .WithDescription("Descuenta créditos a un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("ID del usuario al que descontar créditos")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a descontar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var removeCreditsGuildCommand = removeCreditsCommand.Build();
+        await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'descontar' registered for the guild.");
+    }
+    
+    private void ScheduleMonthlyRedistribution(decimal percentage)
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                DateTime now = DateTime.Now;
+                DateTime nextRun = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59);
+
+                TimeSpan waitTime = nextRun - now;
+                Console.WriteLine($"{waitTime}%");
+                await Task.Delay(waitTime);
+                
+                RedistributeWealth(percentage);
+            }
+        });
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
@@ -114,6 +171,7 @@ class Bot
     {
         if (command.Data.Name == "menu")
         {
+            
             var menu = new SelectMenuBuilder()
                 .WithCustomId("select_menu")
                 .WithPlaceholder("Elige una opción...")
@@ -126,6 +184,102 @@ class Bot
 
             // Respond with an ephemeral message
             await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
+        }
+        
+        else if (command.Data.Name == "añadir")
+        {
+            var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+            var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+            // Define the authorized user ID (replace with the actual user ID)
+            ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
+
+            // Check if the user invoking the command is authorized
+            if (command.User.Id != authorizedUserId)
+            {
+                // Respond with an error message if the user is not authorized
+                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                return;
+            }
+            
+            if (userOption != null && amountOption != null)
+            {
+                ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+                int amount = Convert.ToInt32(amountOption.Value);
+                
+                if (userId != 0)
+                {
+                    LoadData();
+                    
+                    // Add credits to the user
+                    if (!_userReactionCounts.ContainsKey(userId))
+                    {
+                        _userReactionCounts[userId] = 0;
+                    }
+
+                    _userReactionCounts[userId] += amount;
+                    SaveData(); // Save updated data to CSV
+
+                    // Send a confirmation message
+                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
+                }
+                else
+                {
+                    await command.RespondAsync("Usuario no válido.", ephemeral: true);
+                }
+            }
+            else
+            {
+                await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+            }
+        }
+        
+        else if (command.Data.Name == "descontar")
+        {
+            var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+            var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+            // Define the authorized user ID (replace with the actual user ID)
+            ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
+
+            // Check if the user invoking the command is authorized
+            if (command.User.Id != authorizedUserId)
+            {
+                // Respond with an error message if the user is not authorized
+                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                return;
+            }
+            
+            if (userOption != null && amountOption != null)
+            {
+                ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+                int amount = Convert.ToInt32(amountOption.Value);
+                
+                if (userId != 0)
+                {
+                    LoadData();
+                    
+                    // Discount credits to the user
+                    if (!_userReactionCounts.ContainsKey(userId))
+                    {
+                        _userReactionCounts[userId] = 0;
+                    }
+
+                    _userReactionCounts[userId] -= amount;
+                    SaveData(); // Save updated data to CSV
+
+                    // Send a confirmation message
+                    await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
+                }
+                else
+                {
+                    await command.RespondAsync("Usuario no válido.", ephemeral: true);
+                }
+            }
+            else
+            {
+                await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+            }
         }
     }
     else if (interaction is SocketMessageComponent component)
@@ -207,8 +361,71 @@ class Bot
         }
     }
 }
+    
+    private void RedistributeWealth(decimal percentage)
+    {
+        if (percentage <= 0 || percentage > 100)
+        {
+            Console.WriteLine("Invalid percentage. Please provide a value between 0 and 100.");
+            return;
+        }
 
+        if (_userReactionCounts.Count < 2)
+        {
+            Console.WriteLine("Not enough users to redistribute wealth.");
+            return;
+        }
 
+        LoadData();
+        
+        // Find the wealthiest user
+        var wealthiestUser = _userReactionCounts.OrderByDescending(kvp => kvp.Value).First();
+        ulong wealthiestUserId = wealthiestUser.Key;
+        int wealthiestUserCredits = wealthiestUser.Value;
+
+        // Calculate the amount to redistribute
+        int amountToRedistribute = (int)(wealthiestUserCredits * (percentage / 100m));
+        if (amountToRedistribute <= 0)
+        {
+            Console.WriteLine("Redistribution amount is too small to be meaningful.");
+            return;
+        }
+
+        // Deduct the amount from the wealthiest user
+        _userReactionCounts[wealthiestUserId] -= amountToRedistribute;
+
+        // Calculate the amount each other user receives
+        int numberOfRecipients = _userReactionCounts.Count - 1;
+        int amountPerUser = amountToRedistribute / numberOfRecipients;
+
+        foreach (var userId in _userReactionCounts.Keys.ToList())
+        {
+            if (userId != wealthiestUserId)
+            {
+                _userReactionCounts[userId] += amountPerUser;
+            }
+        }
+
+        // Save the updated data to the CSV
+        SaveData();
+        
+        // Sending a message to a specific channel
+        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+        if (targetChannel != null)
+        {
+            // Sending a message to the specific channel and tagging the user
+            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} creditos. https://media1.tenor.com/m/4wo9yEcmBcsAAAAd/winnie-the-pooh-ariel.gif");
+        }
+        else
+        {
+            Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+        }
+
+        Console.WriteLine($"Redistributed {amountToRedistribute} credits from user {wealthiestUserId}. Each of the other {numberOfRecipients} users received {amountPerUser} credits.");
+    }
+    
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
         var message = await cacheable.GetOrDownloadAsync();
@@ -259,7 +476,7 @@ class Bot
                     _userReactionCounts[messageAuthorId] = _reactionIncrement;
                 }
 
-                var author = _client.GetUser(messageAuthorId) as SocketUser;
+                var author = _client.GetUser(messageAuthorId);
                 var authorName = author?.Username ?? "Unknown"; 
                 Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
 
