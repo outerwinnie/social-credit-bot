@@ -146,17 +146,6 @@ class Bot
         if (command.Data.Name == "menu")
         {
             
-            // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID"));; // Replace with the actual Discord user ID of the authorized user
-
-            // Check if the user invoking the command is authorized
-            if (command.User.Id != authorizedUserId)
-            {
-                // Respond with an error message if the user is not authorized
-                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-                return;
-            }
-            
             var menu = new SelectMenuBuilder()
                 .WithCustomId("select_menu")
                 .WithPlaceholder("Elige una opción...")
@@ -176,6 +165,17 @@ class Bot
             var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
+            // Define the authorized user ID (replace with the actual user ID)
+            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID"));; // Replace with the actual Discord user ID of the authorized user
+
+            // Check if the user invoking the command is authorized
+            if (command.User.Id != authorizedUserId)
+            {
+                // Respond with an error message if the user is not authorized
+                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                return;
+            }
+            
             if (userOption != null && amountOption != null)
             {
                 ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
@@ -213,6 +213,17 @@ class Bot
             var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
+            // Define the authorized user ID (replace with the actual user ID)
+            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID"));; // Replace with the actual Discord user ID of the authorized user
+
+            // Check if the user invoking the command is authorized
+            if (command.User.Id != authorizedUserId)
+            {
+                // Respond with an error message if the user is not authorized
+                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                return;
+            }
+            
             if (userOption != null && amountOption != null)
             {
                 ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
