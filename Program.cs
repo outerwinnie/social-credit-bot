@@ -78,7 +78,8 @@ class Bot
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
-        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CURRENCY_PERCENTAGE")));
+        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CURRENCY_PERCENTAGE") ?? throw new InvalidOperationException()));
+        Console.WriteLine(int.Parse(Environment.GetEnvironmentVariable("CURRENCY_PERCENTAGE")));
 
     }
 
@@ -187,7 +188,7 @@ class Bot
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
             // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID"));; // Replace with the actual Discord user ID of the authorized user
+            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException()); // Replace with the actual Discord user ID of the authorized user
 
             // Check if the user invoking the command is authorized
             if (command.User.Id != authorizedUserId)
@@ -235,7 +236,7 @@ class Bot
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
             // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID"));; // Replace with the actual Discord user ID of the authorized user
+            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException()); // Replace with the actual Discord user ID of the authorized user
 
             // Check if the user invoking the command is authorized
             if (command.User.Id != authorizedUserId)
@@ -457,7 +458,7 @@ class Bot
                     _userReactionCounts[messageAuthorId] = _reactionIncrement;
                 }
 
-                var author = _client.GetUser(messageAuthorId) as SocketUser;
+                var author = _client.GetUser(messageAuthorId);
                 var authorName = author?.Username ?? "Unknown"; 
                 Console.WriteLine($"Message author {authorName} received a reaction. Total reactions for this user: {_userReactionCounts[messageAuthorId]}.");
 
