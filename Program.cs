@@ -119,6 +119,24 @@ class Bot
         var addCreditsGlobalCommand = addCreditsCommand.Build();
         await _client.Rest.CreateGlobalCommand(addCreditsGlobalCommand);
         Console.WriteLine("Slash command 'añadir' registered.");
+        
+        var removeCreditsCommand = new SlashCommandBuilder()
+            .WithName("descontar")
+            .WithDescription("Descuenta créditos a un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("ID del usuario al que descontar créditos")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a descontar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var removeCreditsGlobalCommand = removeCreditsCommand.Build();
+        await _client.Rest.CreateGlobalCommand(removeCreditsGlobalCommand);
+        Console.WriteLine("Slash command 'descontar' registered.");
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
@@ -129,7 +147,7 @@ class Bot
         {
             
             // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = 154537457008902144; // Replace with the actual Discord user ID of the authorized user
+            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID"));; // Replace with the actual Discord user ID of the authorized user
 
             // Check if the user invoking the command is authorized
             if (command.User.Id != authorizedUserId)
@@ -154,6 +172,43 @@ class Bot
         }
         
         else if (command.Data.Name == "añadir")
+        {
+            var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+            var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+            if (userOption != null && amountOption != null)
+            {
+                ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+                int amount = Convert.ToInt32(amountOption.Value);
+                
+                if (userId != 0)
+                {
+                    LoadData();
+                    
+                    // Add credits to the user
+                    if (!_userReactionCounts.ContainsKey(userId))
+                    {
+                        _userReactionCounts[userId] = 0;
+                    }
+
+                    _userReactionCounts[userId] += amount;
+                    SaveData(); // Save updated data to CSV
+
+                    // Send a confirmation message
+                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: true);
+                }
+                else
+                {
+                    await command.RespondAsync("Usuario no válido.", ephemeral: true);
+                }
+            }
+            else
+            {
+                await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+            }
+        }
+        
+        else if (command.Data.Name == "descontar")
         {
             var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
