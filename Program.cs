@@ -30,13 +30,16 @@ class Bot
     private readonly int _reactionIncrement;
     private readonly int _recuerdatePrice; // Reaction threshold from environment variable
     private readonly ulong guildID;
+    private readonly ulong adminID;
 
     public Bot()
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
-        guildID = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID"));
+        guildID = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
+        adminID = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_ID") ?? throw new InvalidOperationException());
+
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -189,7 +192,7 @@ class Bot
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
             // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException()); // Replace with the actual Discord user ID of the authorized user
+            ulong authorizedUserId = adminID; // Replace with the actual Discord user ID of the authorized user
 
             // Check if the user invoking the command is authorized
             if (command.User.Id != authorizedUserId)
@@ -237,7 +240,7 @@ class Bot
             var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
             // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException()); // Replace with the actual Discord user ID of the authorized user
+            ulong authorizedUserId = adminID; // Replace with the actual Discord user ID of the authorized user
 
             // Check if the user invoking the command is authorized
             if (command.User.Id != authorizedUserId)
