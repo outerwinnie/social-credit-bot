@@ -121,9 +121,6 @@ class Bot
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.Integer));
         
-        var addCreditsGlobalCommand = addCreditsCommand.Build();
-        await _client.Rest.CreateGlobalCommand(addCreditsGlobalCommand);
-        Console.WriteLine("Slash command 'añadir' registered.");
         var addCreditsGuildCommand = addCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(addCreditsGuildCommand, guildID);
         Console.WriteLine("Slash command 'descontar' registered for the guild.");
@@ -142,9 +139,6 @@ class Bot
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.Integer));
         
-        var removeCreditsGlobalCommand = removeCreditsCommand.Build();
-        await _client.Rest.CreateGlobalCommand(removeCreditsGlobalCommand);
-        Console.WriteLine("Slash command 'descontar' registered.");
         var removeCreditsGuildCommand = removeCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, guildID);
         Console.WriteLine("Slash command 'descontar' registered for the guild.");
@@ -224,7 +218,7 @@ class Bot
                     SaveData(); // Save updated data to CSV
 
                     // Send a confirmation message
-                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: true);
+                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
                 }
                 else
                 {
@@ -272,7 +266,7 @@ class Bot
                     SaveData(); // Save updated data to CSV
 
                     // Send a confirmation message
-                    await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: true);
+                    await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
                 }
                 else
                 {
