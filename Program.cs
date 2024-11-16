@@ -98,6 +98,10 @@ class Bot
             .WithName("menu")
             .WithDescription("Abre el menu");
         
+        var globalCommand = commandService.Build();
+        await _client.Rest.CreateGlobalCommand(globalCommand);
+        Console.WriteLine("Slash command registered.");
+        
         var addCreditsCommand = new SlashCommandBuilder()
             .WithName("añadir")
             .WithDescription("Añade créditos a un usuario")
@@ -111,10 +115,10 @@ class Bot
                 .WithDescription("Cantidad de créditos a añadir")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.Integer));
-
-        var globalCommand = commandService.Build();
-        await _client.Rest.CreateGlobalCommand(globalCommand);
-        Console.WriteLine("Slash command registered.");
+        
+        var addCreditsGlobalCommand = addCreditsCommand.Build();
+        await _client.Rest.CreateGlobalCommand(addCreditsGlobalCommand);
+        Console.WriteLine("Slash command 'añadir' registered.");
     }
 
     private async Task InteractionCreated(SocketInteraction interaction)
