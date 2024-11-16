@@ -302,7 +302,7 @@ class Bot
             {
                 var userId = component.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
-                RedistributeWealth(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
+                RedistributeWealth(50);
                 await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
         }
@@ -412,7 +412,7 @@ class Bot
         if (targetChannel != null)
         {
             // Sending a message to the specific channel and tagging the user
-            targetChannel.SendMessageAsync("A");
+            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario {wealthiestUserId}. Cada usuario recibira {amountPerUser} creditos.");
         }
         else
         {
