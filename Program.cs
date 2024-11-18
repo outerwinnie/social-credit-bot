@@ -366,11 +366,9 @@ class Bot
                         // Write the updated count to the CSV file
                         SaveData();
 
-                        SendPostRequestAsync();
-                    
                         // Respond to the interaction
-                        await component.RespondAsync("Añadida una nueva imagena a la cola, se enviara en los proximos 5 minutos. Créditos restantes: " + reactionsReceived, ephemeral: true);
-                    
+                        await component.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
                         // Sending a message to a specific channel
                         var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
                         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
@@ -385,6 +383,8 @@ class Bot
                         {
                             Console.WriteLine($"Could not find the target channel with ID: {channelId}");
                         }
+                        
+                        SendPostRequestAsync();
                     }
                     else
                     {
