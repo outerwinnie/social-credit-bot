@@ -1,10 +1,13 @@
 ﻿using System.Globalization;
+using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
+
+namespace Social_Credit_Bot;
 
 class Program
 {
@@ -164,203 +167,233 @@ class Bot
             }
         });
     }
+    
+    private static readonly HttpClient client = new HttpClient();
 
-    private async Task InteractionCreated(SocketInteraction interaction)
-{
-    if (interaction is SocketSlashCommand command)
+    public static async Task SendPostRequestAsync()
     {
-        if (command.Data.Name == "menu")
+        try
         {
-            
-            var menu = new SelectMenuBuilder()
-                .WithCustomId("select_menu")
-                .WithPlaceholder("Elige una opción...")
-                .AddOption("Canjear una recompensa", "option1")
-                .AddOption("Credito actual", "option2");
+            // The URL for the POST request
+            var url = "http://192.168.1.132:5027/api/bot/send";
 
-            var message = new ComponentBuilder()
-                .WithSelectMenu(menu)
-                .Build();
+            // Prepare the data you want to send
+            var jsonData = "{ \"yourField\": \"value\" }"; // JSON data as a string (adjust as needed)
 
-            // Respond with an ephemeral message
-            await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
+            // Create the StringContent for the request
+            var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            // Send the POST request
+            var response = await client.PostAsync(url, content);
+
+            // Ensure successful response status code
+            response.EnsureSuccessStatusCode();
+
+            // Read and output the response content
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Response: " + responseBody);
         }
-        
-        else if (command.Data.Name == "añadir")
+        catch (Exception ex)
         {
-            var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-            var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
-
-            // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
-
-            // Check if the user invoking the command is authorized
-            if (command.User.Id != authorizedUserId)
-            {
-                // Respond with an error message if the user is not authorized
-                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-                return;
-            }
-            
-            if (userOption != null && amountOption != null)
-            {
-                ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
-                int amount = Convert.ToInt32(amountOption.Value);
-                
-                if (userId != 0)
-                {
-                    LoadData();
-                    
-                    // Add credits to the user
-                    if (!_userReactionCounts.ContainsKey(userId))
-                    {
-                        _userReactionCounts[userId] = 0;
-                    }
-
-                    _userReactionCounts[userId] += amount;
-                    SaveData(); // Save updated data to CSV
-
-                    // Send a confirmation message
-                    await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
-                }
-                else
-                {
-                    await command.RespondAsync("Usuario no válido.", ephemeral: true);
-                }
-            }
-            else
-            {
-                await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
-            }
-        }
-        
-        else if (command.Data.Name == "descontar")
-        {
-            var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-            var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
-
-            // Define the authorized user ID (replace with the actual user ID)
-            ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
-
-            // Check if the user invoking the command is authorized
-            if (command.User.Id != authorizedUserId)
-            {
-                // Respond with an error message if the user is not authorized
-                await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-                return;
-            }
-            
-            if (userOption != null && amountOption != null)
-            {
-                ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
-                int amount = Convert.ToInt32(amountOption.Value);
-                
-                if (userId != 0)
-                {
-                    LoadData();
-                    
-                    // Discount credits to the user
-                    if (!_userReactionCounts.ContainsKey(userId))
-                    {
-                        _userReactionCounts[userId] = 0;
-                    }
-
-                    _userReactionCounts[userId] -= amount;
-                    SaveData(); // Save updated data to CSV
-
-                    // Send a confirmation message
-                    await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
-                }
-                else
-                {
-                    await command.RespondAsync("Usuario no válido.", ephemeral: true);
-                }
-            }
-            else
-            {
-                await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
-            }
+            Console.WriteLine($"Error: {ex.Message}");
         }
     }
-    else if (interaction is SocketMessageComponent component)
+    
+    private async Task InteractionCreated(SocketInteraction interaction)
     {
-        if (component.Data.CustomId == "select_menu")
+        if (interaction is SocketSlashCommand command)
         {
-            var selectedOption = component.Data.Values.FirstOrDefault();
-
-            if (selectedOption == "option1")
+            if (command.Data.Name == "menu")
             {
-                // Create and send the second menu when option1 is selected
-                var secondMenu = new SelectMenuBuilder()
-                    .WithCustomId("second_menu")
-                    .WithPlaceholder("Elige una sub-opción...")
-                    .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
+            
+                var menu = new SelectMenuBuilder()
+                    .WithCustomId("select_menu")
+                    .WithPlaceholder("Elige una opción...")
+                    .AddOption("Canjear una recompensa", "option1")
+                    .AddOption("Credito actual", "option2");
 
-                var secondMessage = new ComponentBuilder()
-                    .WithSelectMenu(secondMenu)
+                var message = new ComponentBuilder()
+                    .WithSelectMenu(menu)
                     .Build();
 
-                // Respond to the interaction with the second menu
-                await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
+                // Respond with an ephemeral message
+                await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
             }
-            else if (selectedOption == "option2")
+        
+            else if (command.Data.Name == "añadir")
             {
-                var userId = component.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
-            }
-        }
-        else if (component.Data.CustomId == "second_menu")
-        {
-            var secondOption = component.Data.Values.FirstOrDefault();
-            if (secondOption == "sub_option_a")
-            {
+                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
-                //Load updated count of the CSV file.
-                LoadData();
+                // Define the authorized user ID (replace with the actual user ID)
+                ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
 
-                var userId = component.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                if (reactionsReceived >= _recuerdatePrice)
+                // Check if the user invoking the command is authorized
+                if (command.User.Id != authorizedUserId)
                 {
-                    // Subtract the _recuerdatePrice from reactionsReceived
-                    reactionsReceived -= _recuerdatePrice;
-                    
-                    // Update the reaction count
-                    _userReactionCounts[userId] = reactionsReceived;
-                    
-                    // Write the updated count to the CSV file
-                    SaveData();
-
-                    //Write the added reward to the CSV file
-                    WriteRewardToCsv("recuerdate", 1);
-                    
-                    // Respond to the interaction
-                    await component.RespondAsync("Añadida una nueva imagena a la cola, se enviara en los proximos 5 minutos. Créditos restantes: " + reactionsReceived, ephemeral: true);
-                    
-                    // Sending a message to a specific channel
-                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
-                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                    if (targetChannel != null)
+                    // Respond with an error message if the user is not authorized
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+            
+                if (userOption != null && amountOption != null)
+                {
+                    ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+                    int amount = Convert.ToInt32(amountOption.Value);
+                
+                    if (userId != 0)
                     {
-                    // Sending a message to the specific channel and tagging the user
-                    var userMention = component.User.Mention; // This will mention the user who used the option
-                    await targetChannel.SendMessageAsync($"{userMention} ha canjeado una nueva recompensa 'Recuerdate' por { _recuerdatePrice} créditos.");
+                        LoadData();
+                    
+                        // Add credits to the user
+                        if (!_userReactionCounts.ContainsKey(userId))
+                        {
+                            _userReactionCounts[userId] = 0;
+                        }
+
+                        _userReactionCounts[userId] += amount;
+                        SaveData(); // Save updated data to CSV
+
+                        // Send a confirmation message
+                        await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
                     }
                     else
                     {
-                        Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+                        await command.RespondAsync("Usuario no válido.", ephemeral: true);
                     }
                 }
                 else
                 {
-                    await component.RespondAsync($"No tienes suficiente credito social. Necesitas {_recuerdatePrice} creditos.", ephemeral: true);
+                    await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+                }
+            }
+        
+            else if (command.Data.Name == "descontar")
+            {
+                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+                // Define the authorized user ID (replace with the actual user ID)
+                ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
+
+                // Check if the user invoking the command is authorized
+                if (command.User.Id != authorizedUserId)
+                {
+                    // Respond with an error message if the user is not authorized
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+            
+                if (userOption != null && amountOption != null)
+                {
+                    ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+                    int amount = Convert.ToInt32(amountOption.Value);
+                
+                    if (userId != 0)
+                    {
+                        LoadData();
+                    
+                        // Discount credits to the user
+                        if (!_userReactionCounts.ContainsKey(userId))
+                        {
+                            _userReactionCounts[userId] = 0;
+                        }
+
+                        _userReactionCounts[userId] -= amount;
+                        SaveData(); // Save updated data to CSV
+
+                        // Send a confirmation message
+                        await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
+                    }
+                    else
+                    {
+                        await command.RespondAsync("Usuario no válido.", ephemeral: true);
+                    }
+                }
+                else
+                {
+                    await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+                }
+            }
+        }
+        else if (interaction is SocketMessageComponent component)
+        {
+            if (component.Data.CustomId == "select_menu")
+            {
+                var selectedOption = component.Data.Values.FirstOrDefault();
+
+                if (selectedOption == "option1")
+                {
+                    // Create and send the second menu when option1 is selected
+                    var secondMenu = new SelectMenuBuilder()
+                        .WithCustomId("second_menu")
+                        .WithPlaceholder("Elige una sub-opción...")
+                        .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
+
+                    var secondMessage = new ComponentBuilder()
+                        .WithSelectMenu(secondMenu)
+                        .Build();
+
+                    // Respond to the interaction with the second menu
+                    await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
+                }
+                else if (selectedOption == "option2")
+                {
+                    var userId = component.User.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+                }
+            }
+            else if (component.Data.CustomId == "second_menu")
+            {
+                var secondOption = component.Data.Values.FirstOrDefault();
+                if (secondOption == "sub_option_a")
+                {
+
+                    //Load updated count of the CSV file.
+                    LoadData();
+
+                    var userId = component.User.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    if (reactionsReceived >= _recuerdatePrice)
+                    {
+                        // Subtract the _recuerdatePrice from reactionsReceived
+                        reactionsReceived -= _recuerdatePrice;
+                    
+                        // Update the reaction count
+                        _userReactionCounts[userId] = reactionsReceived;
+                    
+                        // Write the updated count to the CSV file
+                        SaveData();
+
+                        // Respond to the interaction
+                        await component.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
+                        // Sending a message to a specific channel
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                        if (targetChannel != null)
+                        {
+                            // Sending a message to the specific channel and tagging the user
+                            var userMention = component.User.Mention; // This will mention the user who used the option
+                            await targetChannel.SendMessageAsync($"{userMention} ha canjeado una nueva recompensa 'Recuerdate' por { _recuerdatePrice} créditos.");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+                        }
+                        
+                        SendPostRequestAsync();
+                    }
+                    else
+                    {
+                        await component.RespondAsync($"No tienes suficiente credito social. Necesitas {_recuerdatePrice} creditos.", ephemeral: true);
+                    }
                 }
             }
         }
     }
-}
     
     private void RedistributeWealth(decimal percentage)
     {
@@ -580,28 +613,28 @@ class Bot
     }
 
     private void LoadIgnoredUsers()
-{
-    try
     {
-        if (!File.Exists(_ignoredUsersFilePath))
+        try
         {
-            // Create the file if it doesn't exist
-            using var writer = new StreamWriter(_ignoredUsersFilePath);
-            writer.WriteLine("User ID"); // Write a header
-            Console.WriteLine("Ignored users CSV file created.");
-        }
+            if (!File.Exists(_ignoredUsersFilePath))
+            {
+                // Create the file if it doesn't exist
+                using var writer = new StreamWriter(_ignoredUsersFilePath);
+                writer.WriteLine("User ID"); // Write a header
+                Console.WriteLine("Ignored users CSV file created.");
+            }
 
-        // Load ignored users from the file
-        using var reader = new StreamReader(_ignoredUsersFilePath);
-        using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-        _ignoredUsers.UnionWith(csvReader.GetRecords<ulong>());
-        Console.WriteLine($"Loaded {_ignoredUsers.Count} ignored users.");
+            // Load ignored users from the file
+            using var reader = new StreamReader(_ignoredUsersFilePath);
+            using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
+            _ignoredUsers.UnionWith(csvReader.GetRecords<ulong>());
+            Console.WriteLine($"Loaded {_ignoredUsers.Count} ignored users.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading ignored users: {ex.Message}");
+        }
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error loading ignored users: {ex.Message}");
-    }
-}
 
     private void CreateRewardsFileIfNotExists()
     {
