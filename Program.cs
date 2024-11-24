@@ -34,6 +34,7 @@ class Bot
     private readonly int _recuerdatePrice; // Reaction threshold from environment variable
     private readonly ulong _guildId;
     private readonly ulong _adminId;
+    private static int _port;
 
     public Bot()
     {
@@ -42,6 +43,7 @@ class Bot
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
+        _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
 
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
@@ -175,8 +177,10 @@ class Bot
         try
         {
             // The URL for the POST request
-            var url = "http://192.168.1.132:5027/api/bot/send";
-
+            var url = $"http://192.168.1.132:{_port}/api/bot/send";
+            
+            Console.WriteLine(url);
+            
             // Prepare the data you want to send
             var jsonData = "{ \"yourField\": \"value\" }"; // JSON data as a string (adjust as needed)
 
