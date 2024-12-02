@@ -164,11 +164,11 @@ class Bot
                 .WithName("pregunta")
                 .WithDescription("Pregunta a realizar")
                 .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
+                .WithType(ApplicationCommandOptionType.String));
         
         var requestChatbotGuildCommand = requestChatbot.Build();
         await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'pedir' registered for the guild.");
+        Console.WriteLine("Slash command 'preguntar' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -222,7 +222,7 @@ class Bot
         }
     }
     
-    public static async Task SendChatBotRequestAsync(string username)
+    public static async Task SendChatBotRequestAsync(string _requestedUser)
     {
         try
         {
@@ -276,9 +276,9 @@ class Bot
         
             else if (command.Data.Name == "preguntar")
             {
-                var username = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+                var _requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
 
-                if (username != null) await SendChatBotRequestAsync(username);
+                if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
             }
             
             
