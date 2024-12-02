@@ -31,7 +31,8 @@ class Bot
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
     private readonly int _reactionIncrement;
-    private readonly int _recuerdatePrice; // Reaction threshold from environment variable
+    private readonly int _recuerdatePrice;
+    private readonly int _preguntarPrice;
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
@@ -46,6 +47,12 @@ class Bot
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
         _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
 
+        
+        if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _reactionIncrement))
+        {
+            _reactionIncrement = 10; // Default value if the environment variable is not set or invalid
+        }
+        
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -54,7 +61,7 @@ class Bot
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("RECUERDATE_PRICE"), out _recuerdatePrice))
         {
-            _recuerdatePrice = 5; // Default value if the environment variable is not set or invalid
+            _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
         }
 
         _interactionService = new InteractionService(_client.Rest);
@@ -226,7 +233,6 @@ class Bot
     {
         if (_requestedUser == "outerwinnie")
         {
-            
             // The URL for the GET request
             var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key=234lnjkKNL234";
             
@@ -264,7 +270,31 @@ class Bot
             else if (command.Data.Name == "preguntar")
             {
                 var _requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+                var commanduser = command.User;
 
+                if (commanduser != null)
+                {
+                    LoadData();
+                    
+                    var userId = commanduser.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    if (reactionsReceived >= _recuerdatePrice)
+                    {
+                        // Subtract the _preguntarPrice from reactionsReceived
+                        reactionsReceived -= _preguntarPrice;
+                    
+                        // Update the reaction count
+                        _userReactionCounts[userId] = reactionsReceived;
+                    
+                        // Write the updated count to the CSV file
+                        SaveData();
+
+                        // Respond to the interaction
+                        await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                    }
+                    
+                }
+                
                 if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
             }
             
