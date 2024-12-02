@@ -36,7 +36,7 @@ class Bot
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
-    private static int _safeKey;
+    private static string _safeKey;
     private static string _requestedUser;
 
     public Bot()
@@ -47,7 +47,7 @@ class Bot
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
         _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
-        _safeKey = Convert.ToInt32(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
+        _safeKey = Convert.ToString(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
 
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
