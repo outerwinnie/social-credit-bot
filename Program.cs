@@ -295,16 +295,23 @@ class Bot
                         // Write the updated count to the CSV file
                         SaveData();
                         
-                        await command.RespondAsync(commanduser.Mention + " pregunta: " + _pregunta);
+                        // Sending a message to a specific channel
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                        if (targetChannel != null)
+                        {
+                            await command.RespondAsync(commanduser.Mention + " pregunta: " + _pregunta);
                         
-                        // Respond to the interaction
-                        await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                            // Respond to the interaction
+                            await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
-                        if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
-                    }
-                    else
-                    {
-                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
+                            if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
+                        }
+                        else
+                        {
+                            await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
+                        }
                     }
                 }
             }
