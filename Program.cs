@@ -299,7 +299,7 @@ class Bot
                         var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
                         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
                         
-                        await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
+                        await command.RespondAsync(commanduser.Mention + " pregunta: " + _pregunta);
                         
                         // Respond to the interaction
                         await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
