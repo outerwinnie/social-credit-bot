@@ -291,11 +291,10 @@ class Bot
 
                         // Respond to the interaction
                         await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
+                        if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
                     }
-                    
                 }
-                
-                if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
             }
             
             
