@@ -298,6 +298,8 @@ class Bot
                         // Sending a message to a specific channel
                         var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
                         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        
+                        Console.WriteLine(targetChannel.Name);
 
                         if (targetChannel != null)
                         {
