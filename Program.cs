@@ -296,7 +296,7 @@ class Bot
                         SaveData();
 
                         // Respond to the interaction
-                        await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        //await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
                         await command.RespondAsync(commanduser.Username + "pregunta:" + _pregunta);
                         if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
