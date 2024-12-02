@@ -224,9 +224,10 @@ class Bot
     
     public static async Task SendChatBotRequestAsync(string _requestedUser)
     {
-        try
+        if (_requestedUser == "outerwinnie")
         {
-            // The URL for the POST request
+            
+            // The URL for the GET request
             var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key=234lnjkKNL234";
             
             Console.WriteLine(url);
@@ -236,14 +237,6 @@ class Bot
 
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
-        }
-        catch (HttpRequestException e)
-        {
-            Console.WriteLine($"Request error: {e.Message}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Unexpected error: {ex.Message}");
         }
     }
     
