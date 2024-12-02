@@ -94,6 +94,7 @@ class Bot
 
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
+        Console.WriteLine($"RECUERDATE_PRICE: {_preguntarPrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
@@ -282,6 +283,8 @@ class Bot
                     {
                         // Subtract the _preguntarPrice from reactionsReceived
                         reactionsReceived -= _preguntarPrice;
+                        
+                        Console.WriteLine(reactionsReceived);
                     
                         // Update the reaction count
                         _userReactionCounts[userId] = reactionsReceived;
