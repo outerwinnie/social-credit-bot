@@ -282,7 +282,7 @@ class Bot
                     
                     var userId = commanduser.Id;
                     var reactionsReceived = GetUserReactionCount(userId);
-                    if (reactionsReceived >= _recuerdatePrice)
+                    if (reactionsReceived >= _preguntarPrice)
                     {
                         // Subtract the _preguntarPrice from reactionsReceived
                         reactionsReceived -= _preguntarPrice;
@@ -304,8 +304,10 @@ class Bot
                         
                         if (targetChannel != null)
                         {
+                            Console.WriteLine("Intentando enviar mensaje en el canal " + targetChannel);
                             await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
-                        
+                            Console.WriteLine("Mensaje enviado");
+                            
                             // Respond to the interaction
                             await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
