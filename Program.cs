@@ -301,7 +301,7 @@ class Bot
 
                         if (targetChannel != null)
                         {
-                            await command.RespondAsync(commanduser.Mention + " pregunta: " + _pregunta);
+                            await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
                         
                             // Respond to the interaction
                             await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
