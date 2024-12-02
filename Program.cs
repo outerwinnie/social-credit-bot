@@ -35,6 +35,7 @@ class Bot
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
+    private static string _requestedUser;
 
     public Bot()
     {
@@ -150,6 +151,24 @@ class Bot
         var removeCreditsGuildCommand = removeCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, _guildId);
         Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        
+        var requestChatbot = new SlashCommandBuilder()
+            .WithName("preguntar")
+            .WithDescription("Realiza una pregunta a el espejismo de un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario al que preguntar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("pregunta")
+                .WithDescription("Pregunta a realizar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var requestChatbotGuildCommand = requestChatbot.Build();
+        await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'pedir' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -203,6 +222,37 @@ class Bot
         }
     }
     
+    public static async Task SendChatBotRequestAsync(string username)
+    {
+        try
+        {
+            // The URL for the POST request
+            var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key=234lnjkKNL234";
+            
+            Console.WriteLine(url);
+            
+            // Prepare the data you want to send
+            var jsonData = "{ \"yourField\": \"value\" }"; // JSON data as a string (adjust as needed)
+
+            // Create the StringContent for the request
+            var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            // Send the POST request
+            var response = await client.PostAsync(url, content);
+
+            // Ensure successful response status code
+            response.EnsureSuccessStatusCode();
+
+            // Read and output the response content
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Response: " + responseBody);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+    
     private async Task InteractionCreated(SocketInteraction interaction)
     {
         if (interaction is SocketSlashCommand command)
@@ -224,6 +274,14 @@ class Bot
                 await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
             }
         
+            else if (command.Data.Name == "preguntar")
+            {
+                var username = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+
+                if (username != null) await SendChatBotRequestAsync(username);
+            }
+            
+            
             else if (command.Data.Name == "añadir")
             {
                 var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
