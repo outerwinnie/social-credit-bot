@@ -308,8 +308,9 @@ class Bot
                             await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
                             Console.WriteLine("Mensaje enviado");
                             
+                            Console.WriteLine();
                             // Respond to the interaction
-                            await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                            await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
                             if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
                         }
