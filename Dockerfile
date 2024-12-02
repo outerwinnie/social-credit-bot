@@ -35,6 +35,7 @@ ENV CREDIT_PERCENTAGE="50"
 ENV GUILD_ID=""
 ENV PORT=""
 ENV PREGUNTAR_PRICE="20"
+ENV SAFE_KEY=""
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]

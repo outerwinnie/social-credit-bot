@@ -36,6 +36,7 @@ class Bot
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
+    private static int _safeKey;
     private static string _requestedUser;
 
     public Bot()
@@ -46,6 +47,7 @@ class Bot
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
         _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
+        _safeKey = Convert.ToInt32(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
 
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
@@ -235,7 +237,7 @@ class Bot
         if (_requestedUser == "outerwinnie")
         {
             // The URL for the GET request
-            var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key=234lnjkKNL234";
+            var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key={_safeKey}";
             
             Console.WriteLine(url);
             
