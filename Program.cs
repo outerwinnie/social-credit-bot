@@ -164,7 +164,7 @@ class Bot
         
         var requestChatbot = new SlashCommandBuilder()
             .WithName("preguntar")
-            .WithDescription("Realiza una pregunta a el espejismo de un usuario")
+            .WithDescription("Realiza una pregunta a el espejismo de un usuario (40 creditos)")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario al que preguntar")
@@ -298,26 +298,23 @@ class Bot
                         // Sending a message to a specific channel
                         var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
                         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                        Console.WriteLine(channelId);
-                        Console.WriteLine(targetChannel.Id);
                         
                         if (targetChannel != null)
                         {
-                            Console.WriteLine("Intentando enviar mensaje en el canal " + targetChannel);
-                            await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
-                            Console.WriteLine("Mensaje enviado");
                             
-                            Console.WriteLine();
+                            await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
+                            await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
+
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
                             if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
                         }
-                        else
-                        {
-                            await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
-                        }
+                    }
+                    
+                    else
+                    {
+                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
                     }
                 }
             }
