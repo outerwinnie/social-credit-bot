@@ -294,14 +294,14 @@ class Bot
                     
                         // Write the updated count to the CSV file
                         SaveData();
-
-                        // Respond to the interaction
-                        await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
-                        await command.FollowupAsync(commanduser.Mention + " pregunta: " + _pregunta);
+                        await command.RespondAsync(commanduser.Mention + " pregunta: " + _pregunta);
+                        
+                        // Respond to the interaction
+                        await command.FollowupAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
                         if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
                     }
-                    
                     else
                     {
                         await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
