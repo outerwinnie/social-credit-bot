@@ -48,9 +48,9 @@ class Bot
         _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
 
         
-        if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _reactionIncrement))
+        if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
         {
-            _reactionIncrement = 10; // Default value if the environment variable is not set or invalid
+            _preguntarPrice = 20; // Default value if the environment variable is not set or invalid
         }
         
 
@@ -94,7 +94,7 @@ class Bot
 
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
-        Console.WriteLine($"RECUERDATE_PRICE: {_preguntarPrice}");
+        Console.WriteLine($"PREGUNTAR_PRICE: {_preguntarPrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
