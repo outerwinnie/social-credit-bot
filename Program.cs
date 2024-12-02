@@ -231,25 +231,19 @@ class Bot
             
             Console.WriteLine(url);
             
-            // Prepare the data you want to send
-            var jsonData = "{ \"yourField\": \"value\" }"; // JSON data as a string (adjust as needed)
-
-            // Create the StringContent for the request
-            var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-
-            // Send the POST request
-            var response = await client.PostAsync(url, content);
-
-            // Ensure successful response status code
+            var response = await client.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
-            // Read and output the response content
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
         }
+        catch (HttpRequestException e)
+        {
+            Console.WriteLine($"Request error: {e.Message}");
+        }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"Unexpected error: {ex.Message}");
         }
     }
     
