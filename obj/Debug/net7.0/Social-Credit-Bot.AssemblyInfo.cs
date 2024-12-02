@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Social-Credit-Bot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6f758a4790edd741f83188e4b7dc2be332648cb6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+45bd62f433c2ed4a698cfddc3c6177ef9a053f96")]
 [assembly: System.Reflection.AssemblyProductAttribute("Social-Credit-Bot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Social-Credit-Bot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
