@@ -11,7 +11,7 @@ namespace Social_Credit_Bot;
 
 class Program
 {
-    private static async Task Main(string[] args)
+    private static async Task Main()
     {
         var bot = new Bot();
         await bot.StartAsync();
@@ -21,14 +21,13 @@ class Program
 
 class Bot
 {
-    private readonly DiscordSocketClient _client = new DiscordSocketClient();
-    private readonly IServiceProvider _services;
+    private readonly DiscordSocketClient _client = new();
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
     private readonly string _rewardsFilePath;
-    private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
-    private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
-    private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
+    private readonly Dictionary<ulong, int> _userReactionCounts = new();
+    private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new(); // Dictionary to track reactions
+    private readonly HashSet<ulong> _ignoredUsers = new(); // Track ignored users
     private readonly int _reactionIncrement;
     private readonly int _recuerdatePrice;
     private readonly int _preguntarPrice;
@@ -36,7 +35,6 @@ class Bot
     private readonly ulong _adminId;
     private static int _port;
     private static string _safeKey = null!;
-    private static string _requestedUser;
 
     public Bot()
     {
@@ -66,7 +64,7 @@ class Bot
         }
 
         var interactionService = new InteractionService(_client.Rest);
-        _services = new ServiceCollection()
+        new ServiceCollection()
             .AddSingleton(_client)
             .AddSingleton(interactionService)
             .BuildServiceProvider();
@@ -219,7 +217,7 @@ class Bot
         });
     }
     
-    private static readonly HttpClient Client = new HttpClient();
+    private static readonly HttpClient Client = new();
 
     public static async Task SendPostRequestAsync()
     {
@@ -252,10 +250,10 @@ class Bot
         }
     }
     
-    public static async Task SendChatBotRequestAsync(string _requestedUser)
+    public static async Task SendChatBotRequestAsync(string requestedUser)
     {
             // The URL for the GET request
-            var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key={_safeKey}";
+            var url = $"https://espejito.micuquantic.cc/api?user={requestedUser}&key={_safeKey}";
             
             Console.WriteLine(url);
             
@@ -680,14 +678,7 @@ class Bot
                     ReactionsReceived = userReaction.Value,
                 };
 
-                if (existingData.ContainsKey(userReaction.Key))
-                {
-                    existingData[userReaction.Key] = record;
-                }
-                else
-                {
-                    existingData.Add(userReaction.Key, record);
-                }
+                existingData[userReaction.Key] = record;
 
                 csvWriter.WriteRecord(record);
                 csvWriter.NextRecord();
