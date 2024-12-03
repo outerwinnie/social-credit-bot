@@ -164,7 +164,7 @@ class Bot
         
         var requestChatbot = new SlashCommandBuilder()
             .WithName("preguntar")
-            .WithDescription("Realiza una pregunta a el espejismo de un usuario (40 creditos)")
+            .WithDescription($"Realiza una pregunta a el espejismo de un usuario ({_preguntarPrice})")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario al que preguntar")
