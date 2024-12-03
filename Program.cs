@@ -31,10 +31,13 @@ class Bot
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
     private readonly int _reactionIncrement;
-    private readonly int _recuerdatePrice; // Reaction threshold from environment variable
+    private readonly int _recuerdatePrice;
+    private readonly int _preguntarPrice;
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
+    private static string _safeKey;
+    private static string _requestedUser;
 
     public Bot()
     {
@@ -44,7 +47,14 @@ class Bot
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
         _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
+        _safeKey = Convert.ToString(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
 
+        
+        if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
+        {
+            _preguntarPrice = 20; // Default value if the environment variable is not set or invalid
+        }
+        
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -53,7 +63,7 @@ class Bot
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("RECUERDATE_PRICE"), out _recuerdatePrice))
         {
-            _recuerdatePrice = 5; // Default value if the environment variable is not set or invalid
+            _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
         }
 
         _interactionService = new InteractionService(_client.Rest);
@@ -86,6 +96,7 @@ class Bot
 
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
+        Console.WriteLine($"PREGUNTAR_PRICE: {_preguntarPrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
@@ -131,7 +142,7 @@ class Bot
         
         var addCreditsGuildCommand = addCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(addCreditsGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        Console.WriteLine("Slash command 'añadir' registered for the guild.");
         
         var removeCreditsCommand = new SlashCommandBuilder()
             .WithName("descontar")
@@ -150,6 +161,24 @@ class Bot
         var removeCreditsGuildCommand = removeCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, _guildId);
         Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        
+        var requestChatbot = new SlashCommandBuilder()
+            .WithName("preguntar")
+            .WithDescription("Realiza una pregunta a el espejismo de un usuario (40 creditos)")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario al que preguntar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("pregunta")
+                .WithDescription("Pregunta a realizar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String));
+        
+        var requestChatbotGuildCommand = requestChatbot.Build();
+        await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'preguntar' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -203,6 +232,23 @@ class Bot
         }
     }
     
+    public static async Task SendChatBotRequestAsync(string _requestedUser)
+    {
+        if (_requestedUser == "outerwinnie")
+        {
+            // The URL for the GET request
+            var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key={_safeKey}";
+            
+            Console.WriteLine(url);
+            
+            var response = await client.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Response: " + responseBody);
+        }
+    }
+    
     private async Task InteractionCreated(SocketInteraction interaction)
     {
         if (interaction is SocketSlashCommand command)
@@ -224,6 +270,56 @@ class Bot
                 await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
             }
         
+            else if (command.Data.Name == "preguntar")
+            {
+                var _requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+                var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
+                var commanduser = command.User;
+
+                if (commanduser != null)
+                {
+                    LoadData();
+                    
+                    var userId = commanduser.Id;
+                    var reactionsReceived = GetUserReactionCount(userId);
+                    if (reactionsReceived >= _preguntarPrice)
+                    {
+                        // Subtract the _preguntarPrice from reactionsReceived
+                        reactionsReceived -= _preguntarPrice;
+                        
+                        Console.WriteLine(reactionsReceived);
+                    
+                        // Update the reaction count
+                        _userReactionCounts[userId] = reactionsReceived;
+                    
+                        // Write the updated count to the CSV file
+                        SaveData();
+                        
+                        // Sending a message to a specific channel
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        
+                        if (targetChannel != null)
+                        {
+                            
+                            await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
+                            await targetChannel.SendMessageAsync("**Pregunta**: " + _pregunta);
+
+                            // Respond to the interaction
+                            await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
+                            if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
+                        }
+                    }
+                    
+                    else
+                    {
+                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
+                    }
+                }
+            }
+            
+            
             else if (command.Data.Name == "añadir")
             {
                 var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
