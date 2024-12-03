@@ -31,6 +31,7 @@ class Bot
     private readonly int _reactionIncrement;
     private readonly int _recuerdatePrice;
     private readonly int _preguntarPrice;
+    private readonly int _memePrice;
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _apiUrl;
@@ -52,6 +53,10 @@ class Bot
             _preguntarPrice = 20; // Default value if the environment variable is not set or invalid
         }
         
+        if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _preguntarPrice))
+        {
+            _memePrice = 40; // Default value if the environment variable is not set or invalid
+        }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
         {
@@ -136,6 +141,19 @@ class Bot
         await _client.Rest.CreateGuildCommand(redeemRecuerdateGuildCommand, _guildId);
         Console.WriteLine("Slash command 'recuerdate' registered for the guild.");
         
+        var redeemMemeCommand = new SlashCommandBuilder()
+            .WithName("meme")
+            .WithDescription("Canjea una recompensa 'Recuerdate' version meme")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription($"Cantidad de 'Recuerdate meme version' a canjear ({_recuerdatePrice})")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var redeemMemeGuildCommand = redeemMemeCommand.Build();
+        await _client.Rest.CreateGuildCommand(redeemMemeGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'meme' registered for the guild.");
+        
         var addCreditsCommand = new SlashCommandBuilder()
             .WithName("añadir")
             .WithDescription("Añade créditos a un usuario")
@@ -219,12 +237,12 @@ class Bot
     
     private static readonly HttpClient Client = new HttpClient();
 
-    public static async Task SendPostRequestAsync()
+    public static async Task SendPostRequestAsync(string reward)
     {
         try
         {
             // The URL for the POST request
-            var url = $"{_apiUrl}";
+            var url = $"{_apiUrl}/{reward}";
             
             Console.WriteLine(url);
             
@@ -475,7 +493,67 @@ class Bot
                     // Run SendPostRequestAsync as many times as specified by the multiplier
                     for (int i = 0; i < multiplier; i++)
                     {
-                        await SendPostRequestAsync();
+                        await SendPostRequestAsync(reward:"image");
+                    }
+                }
+                else
+                {
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
+                }
+            }
+            
+            else if (command.Data.Name == "meme")
+            {
+                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+                
+                // Default multiplier is 1 if "cantidad" is not provided or invalid
+                int multiplier = 1;
+
+                if (amountOption != null && int.TryParse(amountOption.Value?.ToString(), out int parsedMultiplier))
+                {
+                    multiplier = parsedMultiplier;
+                }
+                
+                //Load updated count of the CSV file.
+                LoadData();
+
+                var totalprice = _memePrice * multiplier;
+
+                var userId = command.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                if (reactionsReceived >= totalprice)
+                {
+                    // Subtract the _recuerdatePrice from reactionsReceived
+                    reactionsReceived -= totalprice;
+                    
+                    // Update the reaction count
+                    _userReactionCounts[userId] = reactionsReceived;
+                    
+                    // Write the updated count to the CSV file
+                    SaveData();
+
+                    // Respond to the interaction
+                    await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
+                    // Sending a message to a specific channel
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (targetChannel != null)
+                    {
+                        // Sending a message to the specific channel and tagging the user
+                        var userMention = command.User.Mention; // This will mention the user who used the option
+                        await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate version meme' por {totalprice} créditos.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+                    }
+
+                    // Run SendPostRequestAsync as many times as specified by the multiplier
+                    for (int i = 0; i < multiplier; i++)
+                    {
+                        await SendPostRequestAsync(reward:"meme");
                     }
                 }
                 else
