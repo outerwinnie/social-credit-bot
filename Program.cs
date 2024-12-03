@@ -242,7 +242,7 @@ class Bot
         try
         {
             // The URL for the POST request
-            var url = $"{_apiUrl}/{reward}";
+            var url = $"{_apiUrl}{reward}";
             
             Console.WriteLine(url);
             
