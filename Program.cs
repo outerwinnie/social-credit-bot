@@ -234,7 +234,7 @@ class Bot
     
     public static async Task SendChatBotRequestAsync(string _requestedUser)
     {
-        if (_requestedUser == "outerwinnie")
+        if (_requestedUser == "outerwinnie" || _requestedUser == "otromono")
         {
             // The URL for the GET request
             var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key={_safeKey}";
