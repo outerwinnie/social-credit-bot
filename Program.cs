@@ -276,7 +276,7 @@ class Bot
                 var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
                 var commanduser = command.User;
 
-                if (commanduser != null)
+                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono")
                 {
                     LoadData();
                     
@@ -308,15 +308,18 @@ class Bot
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
-                            if (_requestedUser == "outerwinnie" || _requestedUser == "otromono") await SendChatBotRequestAsync(_requestedUser);
-                            else await command.RespondAsync($"Usuario no disponible.", ephemeral: true);
+                            await SendChatBotRequestAsync(_requestedUser);
                         }
                     }
-                    
                     else
                     {
+                        
                         await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
                     }
+                }
+                else
+                {
+                    await command.RespondAsync($"Usuario no disponible.", ephemeral: true);
                 }
             }
             
