@@ -53,7 +53,7 @@ class Bot
             _preguntarPrice = 20; // Default value if the environment variable is not set or invalid
         }
         
-        if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _preguntarPrice))
+        if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
         {
             _memePrice = 40; // Default value if the environment variable is not set or invalid
         }
@@ -99,6 +99,7 @@ class Bot
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
         Console.WriteLine($"PREGUNTAR_PRICE: {_preguntarPrice}");
+        Console.WriteLine($"MEME_PRICE: {_memePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
@@ -120,20 +121,12 @@ class Bot
 
     private async Task RegisterSlashCommands()
     {
-        var commandService = new SlashCommandBuilder()
-            .WithName("menu")
-            .WithDescription("Abre el menu");
-        
-        var globalCommand = commandService.Build();
-        await _client.Rest.CreateGlobalCommand(globalCommand);
-        Console.WriteLine("Slash command registered.");
-        
         var redeemRecuerdateCommand = new SlashCommandBuilder()
             .WithName("recuerdate")
-            .WithDescription("Canjea una recompensa 'Recuerdate'")
+            .WithDescription($"Canjea una recompensa 'Recuerdate' ({_recuerdatePrice})")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
-                .WithDescription($"Cantidad de 'Recuerdate' a canjear ({_recuerdatePrice})")
+                .WithDescription($"Cantidad de 'Recuerdate' a canjear ({_recuerdatePrice} cada)")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.Integer));
         
@@ -143,10 +136,10 @@ class Bot
         
         var redeemMemeCommand = new SlashCommandBuilder()
             .WithName("meme")
-            .WithDescription("Canjea una recompensa 'Recuerdate' version meme")
+            .WithDescription($"Canjea una recompensa 'Recuerdate' version meme ({_recuerdatePrice})" )
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
-                .WithDescription($"Cantidad de 'Recuerdate meme version' a canjear ({_recuerdatePrice})")
+                .WithDescription($"Cantidad de 'Recuerdate' version meme a canjear ({_recuerdatePrice} cada)")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.Integer));
         
