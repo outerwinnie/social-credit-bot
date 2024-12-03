@@ -11,7 +11,7 @@ namespace Social_Credit_Bot;
 
 class Program
 {
-    private static async Task Main(string[] args)
+    private static async Task Main()
     {
         var bot = new Bot();
         await bot.StartAsync();
@@ -22,8 +22,6 @@ class Program
 class Bot
 {
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
-    private readonly InteractionService _interactionService;
-    private readonly IServiceProvider _services;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
     private readonly string _rewardsFilePath;
@@ -35,9 +33,8 @@ class Bot
     private readonly int _preguntarPrice;
     private readonly ulong _guildId;
     private readonly ulong _adminId;
-    private static int _port;
+    private static int _apiUrl;
     private static string _safeKey = null!;
-    private static string _requestedUser;
 
     public Bot()
     {
@@ -46,7 +43,7 @@ class Bot
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
-        _port = Convert.ToInt32(Environment.GetEnvironmentVariable("PORT") ?? throw new InvalidOperationException());
+        _apiUrl = Convert.ToInt32(Environment.GetEnvironmentVariable("API_URL") ?? throw new InvalidOperationException());
         _safeKey = Convert.ToString(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
 
         
@@ -66,10 +63,10 @@ class Bot
             _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
         }
 
-        _interactionService = new InteractionService(_client.Rest);
-        _services = new ServiceCollection()
+        var interactionService = new InteractionService(_client.Rest);
+        new ServiceCollection()
             .AddSingleton(_client)
-            .AddSingleton(_interactionService)
+            .AddSingleton(interactionService)
             .BuildServiceProvider();
     }
 
@@ -220,14 +217,14 @@ class Bot
         });
     }
     
-    private static readonly HttpClient client = new HttpClient();
+    private static readonly HttpClient Client = new HttpClient();
 
     public static async Task SendPostRequestAsync()
     {
         try
         {
             // The URL for the POST request
-            var url = $"http://192.168.1.132:{_port}/api/bot/send";
+            var url = $"{_apiUrl}";
             
             Console.WriteLine(url);
             
@@ -238,7 +235,7 @@ class Bot
             var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
             // Send the POST request
-            var response = await client.PostAsync(url, content);
+            var response = await Client.PostAsync(url, content);
 
             // Ensure successful response status code
             response.EnsureSuccessStatusCode();
@@ -253,14 +250,14 @@ class Bot
         }
     }
     
-    public static async Task SendChatBotRequestAsync(string _requestedUser)
+    public static async Task SendChatBotRequestAsync(string requestedUser)
     {
             // The URL for the GET request
-            var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key={_safeKey}";
+            var url = $"https://espejito.micuquantic.cc/api?user={requestedUser}&key={_safeKey}";
             
             Console.WriteLine(url);
             
-            var response = await client.GetAsync(url);
+            var response = await Client.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
             var responseBody = await response.Content.ReadAsStringAsync();
@@ -273,15 +270,15 @@ class Bot
         {
             if (command.Data.Name == "preguntar")
             {
-                var _requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
-                var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
+                var requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+                var pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
                 var commanduser = command.User;
 
-                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono" || _requestedUser == "esguille" || _requestedUser == "falsatortuga" || _requestedUser == "potajito" || _requestedUser == "deparki")
+                if (commanduser != null && requestedUser == "outerwinnie" || requestedUser == "otromono" || requestedUser == "esguille" ||requestedUser == "falsatortuga")
                 {
                     LoadData();
                     
-                    var userId = commanduser.Id;
+                    var userId = commanduser!.Id;
                     var reactionsReceived = GetUserReactionCount(userId);
                     if (reactionsReceived >= _preguntarPrice)
                     {
@@ -304,12 +301,12 @@ class Bot
                         {
                             
                             await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
-                            await targetChannel.SendMessageAsync($"**Pregunta** a {_requestedUser}: " + _pregunta);
+                            await targetChannel.SendMessageAsync($"**Pregunta** a {requestedUser}: " + pregunta);
 
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
-                            await SendChatBotRequestAsync(_requestedUser);
+                            await SendChatBotRequestAsync(requestedUser);
                         }
                     }
                     else
