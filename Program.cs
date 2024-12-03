@@ -34,7 +34,7 @@ class Bot
     private readonly int _memePrice;
     private readonly ulong _guildId;
     private readonly ulong _adminId;
-    private static string _apiUrl;
+    private static string _apiUrl = null!;
     private static string _safeKey = null!;
 
     public Bot()
