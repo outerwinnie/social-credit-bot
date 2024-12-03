@@ -303,7 +303,7 @@ class Bot
                         {
                             
                             await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
-                            await targetChannel.SendMessageAsync(commanduser.Mention + " pregunta: " + _pregunta);
+                            await targetChannel.SendMessageAsync("Pregunta: " + _pregunta);
 
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
