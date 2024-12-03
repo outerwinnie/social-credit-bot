@@ -22,6 +22,7 @@ class Program
 class Bot
 {
     private readonly DiscordSocketClient _client = new DiscordSocketClient();
+    private readonly InteractionService _interactionService;
     private readonly IServiceProvider _services;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
@@ -35,7 +36,7 @@ class Bot
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
-    private static string _safeKey = null!;
+    private static string _safeKey;
     private static string _requestedUser;
 
     public Bot()
@@ -65,10 +66,10 @@ class Bot
             _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
         }
 
-        var interactionService = new InteractionService(_client.Rest);
+        _interactionService = new InteractionService(_client.Rest);
         _services = new ServiceCollection()
             .AddSingleton(_client)
-            .AddSingleton(interactionService)
+            .AddSingleton(_interactionService)
             .BuildServiceProvider();
     }
 
@@ -219,7 +220,7 @@ class Bot
         });
     }
     
-    private static readonly HttpClient Client = new HttpClient();
+    private static readonly HttpClient client = new HttpClient();
 
     public static async Task SendPostRequestAsync()
     {
@@ -237,7 +238,7 @@ class Bot
             var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
             // Send the POST request
-            var response = await Client.PostAsync(url, content);
+            var response = await client.PostAsync(url, content);
 
             // Ensure successful response status code
             response.EnsureSuccessStatusCode();
@@ -259,7 +260,7 @@ class Bot
             
             Console.WriteLine(url);
             
-            var response = await Client.GetAsync(url);
+            var response = await client.GetAsync(url);
             response.EnsureSuccessStatusCode();
 
             var responseBody = await response.Content.ReadAsStringAsync();
@@ -272,15 +273,15 @@ class Bot
         {
             if (command.Data.Name == "preguntar")
             {
-                var requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
-                var pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
+                var _requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+                var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
                 var commanduser = command.User;
 
-                if (commanduser != null && requestedUser == "outerwinnie" || requestedUser == "otromono" || requestedUser == "esguille" ||requestedUser == "falsatortuga")
+                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono" || _requestedUser == "esguille" ||_requestedUser == "falsatortuga")
                 {
                     LoadData();
                     
-                    var userId = commanduser!.Id;
+                    var userId = commanduser.Id;
                     var reactionsReceived = GetUserReactionCount(userId);
                     if (reactionsReceived >= _preguntarPrice)
                     {
@@ -303,12 +304,12 @@ class Bot
                         {
                             
                             await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
-                            await targetChannel.SendMessageAsync($"**Pregunta** a {requestedUser}: " + pregunta);
+                            await targetChannel.SendMessageAsync($"**Pregunta** a {_requestedUser}: " + _pregunta);
 
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
-                            await SendChatBotRequestAsync(requestedUser);
+                            await SendChatBotRequestAsync(_requestedUser);
                         }
                     }
                     else
@@ -736,6 +737,46 @@ class Bot
             using var writer = new StreamWriter(_rewardsFilePath);
             writer.WriteLine("RewardName,Quantity");
             Console.WriteLine("Rewards CSV file created.");
+        }
+    }
+
+    private void WriteRewardToCsv(string rewardName, int quantity)
+    {
+        try
+        {
+            var rewards = new List<Reward>();
+            if (File.Exists(_rewardsFilePath))
+            {
+                using var reader = new StreamReader(_rewardsFilePath);
+                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
+                csvReader.Context.RegisterClassMap<RewardMap>();
+                rewards = csvReader.GetRecords<Reward>().ToList();
+            }
+
+            var existingReward = rewards.FirstOrDefault(r => r.RewardName == rewardName);
+            if (existingReward != null)
+            {
+                existingReward.Quantity += quantity;
+            }
+            else
+            {
+                rewards.Add(new Reward
+                {
+                    RewardName = rewardName,
+                    Quantity = quantity
+                });
+            }
+
+            using var writer = new StreamWriter(_rewardsFilePath);
+            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
+            csvWriter.Context.RegisterClassMap<RewardMap>();
+            csvWriter.WriteRecords(rewards);
+
+            Console.WriteLine($"Reward '{rewardName}' updated in CSV. New quantity: {existingReward?.Quantity ?? quantity}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error writing reward to CSV: {ex.Message}");
         }
     }
 }
