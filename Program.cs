@@ -277,7 +277,7 @@ class Bot
                 var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
                 var commanduser = command.User;
 
-                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono" || _requestedUser == "esguille" ||_requestedUser == "falsatortuga")
+                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono" || _requestedUser == "esguille" || _requestedUser == "falsatortuga" || _requestedUser == "potajito" || _requestedUser == "deparki")
                 {
                     LoadData();
                     
