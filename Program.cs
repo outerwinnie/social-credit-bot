@@ -136,10 +136,10 @@ class Bot
         
         var redeemMemeCommand = new SlashCommandBuilder()
             .WithName("meme")
-            .WithDescription($"Canjea una recompensa 'Recuerdate' version meme ({_recuerdatePrice})" )
+            .WithDescription($"Canjea una recompensa 'Recuerdate' version meme ({_memePrice})" )
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
-                .WithDescription($"Cantidad de 'Recuerdate' version meme a canjear ({_recuerdatePrice} cada)")
+                .WithDescription($"Cantidad de 'Recuerdate' version meme a canjear ({_memePrice} cada)")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.Integer));
         
