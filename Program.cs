@@ -179,6 +179,14 @@ class Bot
         var requestChatbotGuildCommand = requestChatbot.Build();
         await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
         Console.WriteLine("Slash command 'preguntar' registered for the guild.");
+
+        var checkCredits = new SlashCommandBuilder()
+            .WithName("saldo")
+            .WithDescription("Comprueba tu saldo disponible");
+        
+        var checkCreditsGuildCommand = checkCredits.Build();
+        await _client.Rest.CreateGuildCommand(checkCreditsGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'descontar' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -234,8 +242,6 @@ class Bot
     
     public static async Task SendChatBotRequestAsync(string _requestedUser)
     {
-        if (_requestedUser == "outerwinnie" || _requestedUser == "otromono")
-        {
             // The URL for the GET request
             var url = $"https://espejito.micuquantic.cc/api?user={_requestedUser}&key={_safeKey}";
             
@@ -246,7 +252,6 @@ class Bot
 
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
-        }
     }
     
     private async Task InteractionCreated(SocketInteraction interaction)
@@ -419,6 +424,13 @@ class Bot
                     await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
                 }
             }
+
+            else if (command.Data.Name == "saldo")
+            {
+                var userId = command.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+            }
         }
         else if (interaction is SocketMessageComponent component)
         {
@@ -440,12 +452,6 @@ class Bot
 
                     // Respond to the interaction with the second menu
                     await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
-                }
-                else if (selectedOption == "option2")
-                {
-                    var userId = component.User.Id;
-                    var reactionsReceived = GetUserReactionCount(userId);
-                    await component.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
                 }
             }
             else if (component.Data.CustomId == "second_menu")
