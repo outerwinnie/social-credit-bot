@@ -142,7 +142,7 @@ class Bot
         
         var addCreditsGuildCommand = addCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(addCreditsGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        Console.WriteLine("Slash command 'añadir' registered for the guild.");
         
         var removeCreditsCommand = new SlashCommandBuilder()
             .WithName("descontar")
