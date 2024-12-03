@@ -36,7 +36,7 @@ class Bot
     private readonly ulong _guildId;
     private readonly ulong _adminId;
     private static int _port;
-    private static string _safeKey;
+    private static string _safeKey = null!;
     private static string _requestedUser;
 
     public Bot()
