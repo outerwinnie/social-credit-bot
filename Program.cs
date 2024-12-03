@@ -126,6 +126,19 @@ class Bot
         await _client.Rest.CreateGlobalCommand(globalCommand);
         Console.WriteLine("Slash command registered.");
         
+        var redeemRecuerdateCommand = new SlashCommandBuilder()
+            .WithName("recuerdate")
+            .WithDescription("Descuenta créditos a un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription($"Cantidad de 'Recuerdate' a canjear ({_recuerdatePrice})")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var redeemRecuerdateGuildCommand = redeemRecuerdateCommand.Build();
+        await _client.Rest.CreateGuildCommand(redeemRecuerdateGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'recuerdate' registered for the guild.");
+        
         var addCreditsCommand = new SlashCommandBuilder()
             .WithName("añadir")
             .WithDescription("Añade créditos a un usuario")
@@ -162,7 +175,7 @@ class Bot
         await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, _guildId);
         Console.WriteLine("Slash command 'descontar' registered for the guild.");
         
-        var requestChatbot = new SlashCommandBuilder()
+        var requestChatbotCommand = new SlashCommandBuilder()
             .WithName("preguntar")
             .WithDescription($"Realiza una pregunta a el espejismo de un usuario ({_preguntarPrice})")
             .AddOption(new SlashCommandOptionBuilder()
@@ -176,17 +189,17 @@ class Bot
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.String));
         
-        var requestChatbotGuildCommand = requestChatbot.Build();
+        var requestChatbotGuildCommand = requestChatbotCommand.Build();
         await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
         Console.WriteLine("Slash command 'preguntar' registered for the guild.");
 
-        var checkCredits = new SlashCommandBuilder()
+        var checkCreditsCommand = new SlashCommandBuilder()
             .WithName("saldo")
             .WithDescription("Comprueba tu saldo disponible");
         
-        var checkCreditsGuildCommand = checkCredits.Build();
+        var checkCreditsGuildCommand = checkCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(checkCreditsGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        Console.WriteLine("Slash command 'saldo' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -258,24 +271,7 @@ class Bot
     {
         if (interaction is SocketSlashCommand command)
         {
-            if (command.Data.Name == "menu")
-            {
-            
-                var menu = new SelectMenuBuilder()
-                    .WithCustomId("select_menu")
-                    .WithPlaceholder("Elige una opción...")
-                    .AddOption("Canjear una recompensa", "option1")
-                    .AddOption("Credito actual", "option2");
-
-                var message = new ComponentBuilder()
-                    .WithSelectMenu(menu)
-                    .Build();
-
-                // Respond with an ephemeral message
-                await command.RespondAsync("Elija una opción:", components: message, ephemeral: true);
-            }
-        
-            else if (command.Data.Name == "preguntar")
+            if (command.Data.Name == "preguntar")
             {
                 var _requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
                 var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
@@ -327,7 +323,6 @@ class Bot
                     await command.RespondAsync($"Usuario no disponible.", ephemeral: true);
                 }
             }
-            
             
             else if (command.Data.Name == "añadir")
             {
@@ -431,75 +426,64 @@ class Bot
                 var reactionsReceived = GetUserReactionCount(userId);
                 await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
             }
-        }
-        else if (interaction is SocketMessageComponent component)
-        {
-            if (component.Data.CustomId == "select_menu")
+            
+            else if (command.Data.Name == "recuerdate")
             {
-                var selectedOption = component.Data.Values.FirstOrDefault();
+                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+                
+                // Default multiplier is 1 if "cantidad" is not provided or invalid
+                int multiplier = 1;
 
-                if (selectedOption == "option1")
+                if (amountOption != null && int.TryParse(amountOption.Value?.ToString(), out int parsedMultiplier))
                 {
-                    // Create and send the second menu when option1 is selected
-                    var secondMenu = new SelectMenuBuilder()
-                        .WithCustomId("second_menu")
-                        .WithPlaceholder("Elige una sub-opción...")
-                        .AddOption("Roll de Recuerdate (20 creditos)", "sub_option_a");
-
-                    var secondMessage = new ComponentBuilder()
-                        .WithSelectMenu(secondMenu)
-                        .Build();
-
-                    // Respond to the interaction with the second menu
-                    await component.RespondAsync("Selecciona una sub-opción:", components: secondMessage, ephemeral: true);
+                    multiplier = parsedMultiplier;
                 }
-            }
-            else if (component.Data.CustomId == "second_menu")
-            {
-                var secondOption = component.Data.Values.FirstOrDefault();
-                if (secondOption == "sub_option_a")
+                
+                //Load updated count of the CSV file.
+                LoadData();
+
+                var totalprice = _recuerdatePrice * multiplier;
+
+                var userId = command.User.Id;
+                var reactionsReceived = GetUserReactionCount(userId);
+                if (reactionsReceived >= totalprice)
                 {
+                    // Subtract the _recuerdatePrice from reactionsReceived
+                    reactionsReceived -= totalprice;
+                    
+                    // Update the reaction count
+                    _userReactionCounts[userId] = reactionsReceived;
+                    
+                    // Write the updated count to the CSV file
+                    SaveData();
 
-                    //Load updated count of the CSV file.
-                    LoadData();
+                    // Respond to the interaction
+                    await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                        
+                    // Sending a message to a specific channel
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
 
-                    var userId = component.User.Id;
-                    var reactionsReceived = GetUserReactionCount(userId);
-                    if (reactionsReceived >= _recuerdatePrice)
+                    if (targetChannel != null)
                     {
-                        // Subtract the _recuerdatePrice from reactionsReceived
-                        reactionsReceived -= _recuerdatePrice;
-                    
-                        // Update the reaction count
-                        _userReactionCounts[userId] = reactionsReceived;
-                    
-                        // Write the updated count to the CSV file
-                        SaveData();
-
-                        // Respond to the interaction
-                        await component.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
-                        
-                        // Sending a message to a specific channel
-                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
-                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                        if (targetChannel != null)
-                        {
-                            // Sending a message to the specific channel and tagging the user
-                            var userMention = component.User.Mention; // This will mention the user who used the option
-                            await targetChannel.SendMessageAsync($"{userMention} ha canjeado una nueva recompensa 'Recuerdate' por { _recuerdatePrice} créditos.");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Could not find the target channel with ID: {channelId}");
-                        }
-                        
-                        SendPostRequestAsync();
+                        // Sending a message to the specific channel and tagging the user
+                        var userMention = command.User.Mention; // This will mention the user who used the option
+                        await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate' por {totalprice} créditos.");
                     }
                     else
                     {
-                        await component.RespondAsync($"No tienes suficiente credito social. Necesitas {_recuerdatePrice} creditos.", ephemeral: true);
+                        Console.WriteLine($"Could not find the target channel with ID: {channelId}");
                     }
+
+                    // Run SendPostRequestAsync as many times as specified by the multiplier
+                    for (int i = 0; i < multiplier; i++)
+                    {
+                        await SendPostRequestAsync();
+                    }
+                }
+                else
+                {
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
                 }
             }
         }
