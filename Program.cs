@@ -34,7 +34,7 @@ class Bot
     private readonly int _memePrice;
     private readonly ulong _guildId;
     private readonly ulong _adminId;
-    private static int _apiUrl;
+    private static string _apiUrl;
     private static string _safeKey = null!;
 
     public Bot()
@@ -44,7 +44,7 @@ class Bot
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
-        _apiUrl = Convert.ToInt32(Environment.GetEnvironmentVariable("API_URL") ?? throw new InvalidOperationException());
+        _apiUrl = (Environment.GetEnvironmentVariable("API_URL") ?? throw new InvalidOperationException());
         _safeKey = Convert.ToString(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
 
         
