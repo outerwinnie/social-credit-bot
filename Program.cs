@@ -308,7 +308,8 @@ class Bot
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
                         
-                            if (_requestedUser != null) await SendChatBotRequestAsync(_requestedUser);
+                            if (_requestedUser == "outerwinnie" || _requestedUser == "otromono") await SendChatBotRequestAsync(_requestedUser);
+                            else await command.RespondAsync($"Usuario no disponible.", ephemeral: true);
                         }
                     }
                     
