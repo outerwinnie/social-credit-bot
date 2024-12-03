@@ -468,16 +468,19 @@ class Bot
                     {
                         // Sending a message to the specific channel and tagging the user
                         var userMention = command.User.Mention; // This will mention the user who used the option
-                        await targetChannel.SendMessageAsync($"{userMention} ha canjeado {amountOption} 'Recuerdate' por {totalprice} créditos.");
+                        await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate' por {totalprice} créditos.");
                     }
                     else
                     {
                         Console.WriteLine($"Could not find the target channel with ID: {channelId}");
                     }
-                        
-                    SendPostRequestAsync();
+
+                    // Run SendPostRequestAsync as many times as specified by the multiplier
+                    for (int i = 0; i < multiplier; i++)
+                    {
+                        await SendPostRequestAsync();
+                    }
                 }
-                
                 else
                 {
                     await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
