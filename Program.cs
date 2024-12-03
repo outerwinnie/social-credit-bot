@@ -480,7 +480,7 @@ class Bot
                 
                 else
                 {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_recuerdatePrice} creditos.", ephemeral: true);
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
                 }
             }
         }
