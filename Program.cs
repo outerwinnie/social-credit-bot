@@ -128,7 +128,7 @@ class Bot
         
         var redeemRecuerdateCommand = new SlashCommandBuilder()
             .WithName("recuerdate")
-            .WithDescription("Descuenta créditos a un usuario")
+            .WithDescription("Canjea una recompensa 'Recuerdate'")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
                 .WithDescription($"Cantidad de 'Recuerdate' a canjear ({_recuerdatePrice})")
@@ -277,7 +277,7 @@ class Bot
                 var _pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
                 var commanduser = command.User;
 
-                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono")
+                if (commanduser != null && _requestedUser == "outerwinnie" || _requestedUser == "otromono" || _requestedUser == "esguille" ||_requestedUser == "falsatortuga")
                 {
                     LoadData();
                     
@@ -304,7 +304,7 @@ class Bot
                         {
                             
                             await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
-                            await targetChannel.SendMessageAsync("**Pregunta**: " + _pregunta);
+                            await targetChannel.SendMessageAsync($"{commanduser.Username} **pregunta**: " + _pregunta);
 
                             // Respond to the interaction
                             await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
