@@ -264,7 +264,7 @@ class Bot
                 }
                 
                 TimeSpan waitTime = nextRun - now;
-                Console.WriteLine($"Daily task scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime:hh\\:mm\\:ss})");
+                Console.WriteLine($"Daily task scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime.TotalMinutes:F1} minutes)");
                 await Task.Delay(waitTime);
                 
                 // Execute the daily task
