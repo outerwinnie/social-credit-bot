@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -216,6 +216,7 @@ class Bot
             .WithDescription($"Revela a el usuario que compartio la imagen")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
+                .WithDescription("Usuario a revelar")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.User));
         
