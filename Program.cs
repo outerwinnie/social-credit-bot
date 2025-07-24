@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -38,7 +38,7 @@ class Bot
     private static string _safeKey = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
-    private readonly string _uploader;
+    private static string _uploader;
 
     public Bot()
     {
