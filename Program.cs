@@ -38,6 +38,7 @@ class Bot
     private static string _safeKey = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
+    private readonly string _uploader;
 
     public Bot()
     {
@@ -210,6 +211,18 @@ class Bot
         await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
         Console.WriteLine("Slash command 'preguntar' registered for the guild.");
 
+        var dailyQuizCommand = new SlashCommandBuilder()
+            .WithName("revelar")
+            .WithDescription($"Revela a el usuario que compartio la imagen")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+        
+        var dailyQuizGuildCommand = dailyQuizCommand.Build();
+        await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'revelar' registered for the guild.");
+
         var checkCreditsCommand = new SlashCommandBuilder()
             .WithName("saldo")
             .WithDescription("Comprueba tu saldo disponible");
@@ -298,9 +311,9 @@ class Bot
                 using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
                 if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
                 {
-                    var uploader = uploaderProp.GetString();
-                    Console.WriteLine("Uploader: " + uploader);
-                    return uploader;
+                    _uploader = uploaderProp.GetString();
+                    Console.WriteLine("Uploader: " + _uploader);
+                    return _uploader;
                 }
                 else
                 {
@@ -493,6 +506,21 @@ class Bot
                 var userId = command.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
                 await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+            }
+
+            else if (command.Data.Name == "revelar")
+            {
+                var userId = command.User.Id;
+                var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+
+                if (_uploader == choosenUser)
+                {
+                    await command.RespondAsync($ "<@{userId}> ¡Correcto!");
+                }
+                else
+                {
+                    await command.RespondAsync($ "<@{userId}> ¡Incorrecto!");
+                }
             }
             
             else if (command.Data.Name == "recuerdate")
