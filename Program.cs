@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -276,34 +276,48 @@ class Bot
     
     private static readonly HttpClient Client = new HttpClient();
 
-    public static async Task SendPostRequestAsync(string reward)
+    public static async Task<string?> SendPostRequestAsync(string reward)
     {
         try
         {
-            // The URL for the POST request
             var url = $"{_apiUrl}{reward}";
-            
             Console.WriteLine(url);
-            
-            // Prepare the data you want to send
-            var jsonData = "{ \"yourField\": \"value\" }"; // JSON data as a string (adjust as needed)
 
-            // Create the StringContent for the request
+            var jsonData = "{ \"yourField\": \"value\" }";
             var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
-            // Send the POST request
             var response = await Client.PostAsync(url, content);
-
-            // Ensure successful response status code
             response.EnsureSuccessStatusCode();
 
-            // Read and output the response content
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
+
+            // Parse JSON and extract 'uploader'
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+                if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
+                {
+                    var uploader = uploaderProp.GetString();
+                    Console.WriteLine("Uploader: " + uploader);
+                    return uploader;
+                }
+                else
+                {
+                    Console.WriteLine("No 'uploader' property found in response.");
+                    return null;
+                }
+            }
+            catch (Exception jsonEx)
+            {
+                Console.WriteLine($"Error parsing JSON: {jsonEx.Message}");
+                return null;
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error: {ex.Message}");
+            return null;
         }
     }
     
