@@ -246,9 +246,11 @@ class Bot
                 DateTime now = DateTime.Now;
                 
                 // Parse the time from environment variable (format: HH:MM)
-                if (!TimeSpan.TryParse(_dailyTaskTime, out TimeSpan targetTime))
+                TimeSpan targetTime;
+                if (!TimeSpan.TryParseExact(_dailyTaskTime, @"hh\:mm", null, out targetTime) && 
+                    !TimeSpan.TryParseExact(_dailyTaskTime, @"h\:mm", null, out targetTime))
                 {
-                    Console.WriteLine($"Invalid DAILY_TASK_TIME format: {_dailyTaskTime}. Using default 20:00.");
+                    Console.WriteLine($"Invalid DAILY_TASK_TIME format: '{_dailyTaskTime}'. Expected HH:MM format. Using default 20:00.");
                     targetTime = new TimeSpan(20, 0, 0); // Default to 20:00
                 }
                 
