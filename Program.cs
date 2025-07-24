@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -36,6 +36,8 @@ class Bot
     private readonly ulong _adminId;
     private static string _apiUrl = null!;
     private static string _safeKey = null!;
+    private readonly string _dailyTaskTime;
+    private readonly string _dailyTaskReward;
 
     public Bot()
     {
@@ -67,6 +69,10 @@ class Bot
         {
             _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
         }
+
+        // Daily task configuration
+        _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "20:00";
+        _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
 
         var interactionService = new InteractionService(_client.Rest);
         new ServiceCollection()
@@ -104,6 +110,11 @@ class Bot
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
         Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
+        
+        // Schedule daily task
+        ScheduleDailyTask();
+        Console.WriteLine($"DAILY_TASK_TIME: {_dailyTaskTime}");
+        Console.WriteLine($"DAILY_TASK_REWARD: {_dailyTaskReward}");
 
     }
 
@@ -224,6 +235,42 @@ class Bot
                 await Task.Delay(waitTime);
                 
                 RedistributeWealth(percentage);
+            }
+        });
+    }
+    
+    private void ScheduleDailyTask()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                DateTime now = DateTime.Now;
+                
+                // Parse the time from environment variable (format: HH:MM)
+                if (!TimeSpan.TryParse(_dailyTaskTime, out TimeSpan targetTime))
+                {
+                    Console.WriteLine($"Invalid DAILY_TASK_TIME format: {_dailyTaskTime}. Using default 20:00.");
+                    targetTime = new TimeSpan(20, 0, 0); // Default to 20:00
+                }
+                
+                // Calculate next run time
+                DateTime nextRun = now.Date.Add(targetTime);
+                
+                // If the time has already passed today, schedule for tomorrow
+                if (nextRun <= now)
+                {
+                    nextRun = nextRun.AddDays(1);
+                }
+                
+                TimeSpan waitTime = nextRun - now;
+                Console.WriteLine($"Daily task scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime:hh\:mm\:ss})");
+                
+                await Task.Delay(waitTime);
+                
+                // Execute the daily task
+                Console.WriteLine($"Executing daily task: SendPostRequestAsync with reward '{_dailyTaskReward}'");
+                await SendPostRequestAsync(_dailyTaskReward);
             }
         });
     }
