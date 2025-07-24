@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -264,8 +264,7 @@ class Bot
                 }
                 
                 TimeSpan waitTime = nextRun - now;
-                Console.WriteLine($"Daily task scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime:hh\:mm\:ss})");
-                
+                Console.WriteLine($"Daily task scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime:hh\\:mm\\:ss})");
                 await Task.Delay(waitTime);
                 
                 // Execute the daily task
