@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -71,10 +71,6 @@ class Bot
         {
             _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
         }
-
-        // Daily task configuration
-        _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "20:00";
-        _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
 
         var interactionService = new InteractionService(_client.Rest);
         new ServiceCollection()
