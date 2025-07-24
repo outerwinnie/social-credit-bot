@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -217,11 +217,11 @@ class Bot
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User))
+                .WithType(ApplicationCommandOptionType.User));
         
         var dailyQuizGuildCommand = dailyQuizCommand.Build();
         await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'revelar' registered for the guild.");
+        Console.WriteLine($"Slash command 'revelar' registered for the guild.");
 
         var checkCreditsCommand = new SlashCommandBuilder()
             .WithName("saldo")
@@ -515,11 +515,11 @@ class Bot
 
                 if (_uploader == choosenUser)
                 {
-                    await command.RespondAsync($ "<@{userId}> ¡Correcto!");
+                    await command.RespondAsync($"<@{userId}> ¡Correcto!");
                 }
                 else
                 {
-                    await command.RespondAsync($ "<@{userId}> ¡Incorrecto!");
+                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!");
                 }
             }
             
