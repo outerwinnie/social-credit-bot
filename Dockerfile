@@ -39,6 +39,7 @@ ENV PREGUNTAR_PRICE="30"
 ENV SAFE_KEY=""
 ENV DAILY_TASK_TIME="20:00"
 ENV DAILY_TASK_REWARD="image"
+ENV DAILY_QUIZ_REWARD="50"
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]

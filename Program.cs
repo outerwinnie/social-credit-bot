@@ -38,8 +38,9 @@ class Bot
     private static string _safeKey = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
+    private readonly int _dailyQuizReward;
     private static string _uploader;
-private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
+    private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
 
     public Bot()
     {
@@ -56,12 +57,17 @@ private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
         {
-            _preguntarPrice = 20; // Default value if the environment variable is not set or invalid
+            _preguntarPrice = 25; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD"), out _dailyQuizReward))
+        {
+            _dailyQuizReward = 50; // Default value if the environment variable is not set or invalid
         }
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
         {
-            _memePrice = 40; // Default value if the environment variable is not set or invalid
+            _memePrice = 25; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
@@ -71,7 +77,7 @@ private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("RECUERDATE_PRICE"), out _recuerdatePrice))
         {
-            _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
+            _recuerdatePrice = 15; // Default value if the environment variable is not set or invalid
         }
 
         var interactionService = new InteractionService(_client.Rest);
@@ -516,7 +522,7 @@ private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
                 var userId = command.User.Id;
                 if (_revelarTriedUsers.Contains(userId))
                 {
-                    await command.RespondAsync("Ya has intentado revelar para esta imagen.", ephemeral: true);
+                    await command.RespondAsync("Ya has intentado revelar al posteador de esta imagen.", ephemeral: true);
                     return;
                 }
                 _revelarTriedUsers.Add(userId);
@@ -525,6 +531,20 @@ private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
                 if (_uploader == choosenUser)
                 {
                     await command.RespondAsync($"<@{userId}> ¡Correcto!");
+                    
+                    if (userId != 0)
+                    {
+                        LoadData();
+                    
+                        // Add credits to the user
+                        if (!_userReactionCounts.ContainsKey(userId))
+                        {
+                            _userReactionCounts[userId] = 0;
+                        }
+
+                        _userReactionCounts[userId] += _dailyQuizReward;
+                        SaveData(); // Save updated data to CSV
+                    }
                 }
                 else
                 {
