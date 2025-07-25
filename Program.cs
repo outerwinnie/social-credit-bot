@@ -573,6 +573,12 @@ class Bot
 
             else if (command.Data.Name == "revelar")
             {
+                if (_uploader == null)
+                {
+                    await command.RespondAsync("No se ha encontrado un posteador.", ephemeral: true);
+                    return;
+                }
+                
                 var userId = command.User.Id;
                 if (_revelarTriedUsers.Contains(userId))
                 {
