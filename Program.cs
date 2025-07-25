@@ -576,7 +576,7 @@ class Bot
 
                 Console.WriteLine($"Uploader: {_uploader}");
 
-                if (_uploader == null)
+                if (_uploader == string.Empty)
                 {
                     await command.RespondAsync("No se ha encontrado un posteador.", ephemeral: true);
                     return;
