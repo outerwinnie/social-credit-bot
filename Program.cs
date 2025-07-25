@@ -576,7 +576,7 @@ class Bot
 
                 if (_uploader == string.Empty)
                 {
-                    await command.RespondAsync("No se ha encontrado un posteador.", ephemeral: true);
+                    await command.RespondAsync("La imagen aun no ha sido enviada, espera a que se envie y vuelve a intentarlo.", ephemeral: true);
                     return;
                 }
                 
