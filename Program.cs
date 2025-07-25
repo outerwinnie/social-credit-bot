@@ -42,12 +42,16 @@ class Bot
     private static string _uploader;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private static List<ulong> _revelarCorrectUsers = new List<ulong>();
+    private static readonly string _revelarLeaderboardPath;
+    private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
     public Bot()
     {
+        LoadRevelarLeaderboard();
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+        _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
         _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "20:00";
         _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
@@ -554,6 +558,13 @@ class Bot
                         }
                         _userReactionCounts[userId] += reward;
                         SaveData(); // Save updated data to CSV
+
+                        // Update leaderboard
+                        if (_revelarLeaderboard.ContainsKey(userId))
+                            _revelarLeaderboard[userId]++;
+                        else
+                            _revelarLeaderboard[userId] = 1;
+                        SaveRevelarLeaderboard();
                     }
                 }
                 else
