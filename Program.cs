@@ -804,7 +804,7 @@ class Bot
         if (targetChannel != null)
         {
             // Sending a message to the specific channel and tagging the user
-            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} creditos. https://media1.tenor.com/m/4wo9yEcmBcsAAAAd/winnie-the-pooh-ariel.gif");
+            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} creditos. https://c.tenor.com/4wo9yEcmBcsAAAAd/tenor.gif");
         }
         else
         {
