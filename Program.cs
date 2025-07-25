@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -38,6 +38,9 @@ class Bot
     private static string _safeKey = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
+    private readonly int _dailyQuizReward;
+    private static string _uploader;
+    private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
 
     public Bot()
     {
@@ -54,12 +57,17 @@ class Bot
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
         {
-            _preguntarPrice = 20; // Default value if the environment variable is not set or invalid
+            _preguntarPrice = 25; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD"), out _dailyQuizReward))
+        {
+            _dailyQuizReward = 50; // Default value if the environment variable is not set or invalid
         }
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
         {
-            _memePrice = 40; // Default value if the environment variable is not set or invalid
+            _memePrice = 25; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
@@ -69,7 +77,7 @@ class Bot
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("RECUERDATE_PRICE"), out _recuerdatePrice))
         {
-            _recuerdatePrice = 20; // Default value if the environment variable is not set or invalid
+            _recuerdatePrice = 15; // Default value if the environment variable is not set or invalid
         }
 
         var interactionService = new InteractionService(_client.Rest);
@@ -210,6 +218,19 @@ class Bot
         await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
         Console.WriteLine("Slash command 'preguntar' registered for the guild.");
 
+        var dailyQuizCommand = new SlashCommandBuilder()
+            .WithName("revelar")
+            .WithDescription($"Revela a el usuario que compartio la imagen")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario a revelar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User));
+        
+        var dailyQuizGuildCommand = dailyQuizCommand.Build();
+        await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
+        Console.WriteLine($"Slash command 'revelar' registered for the guild.");
+
         var checkCreditsCommand = new SlashCommandBuilder()
             .WithName("saldo")
             .WithDescription("Comprueba tu saldo disponible");
@@ -276,34 +297,49 @@ class Bot
     
     private static readonly HttpClient Client = new HttpClient();
 
-    public static async Task SendPostRequestAsync(string reward)
+    public static async Task<string?> SendPostRequestAsync(string reward)
     {
         try
         {
-            // The URL for the POST request
             var url = $"{_apiUrl}{reward}";
-            
             Console.WriteLine(url);
-            
-            // Prepare the data you want to send
-            var jsonData = "{ \"yourField\": \"value\" }"; // JSON data as a string (adjust as needed)
 
-            // Create the StringContent for the request
+            var jsonData = "{ \"yourField\": \"value\" }";
             var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
-            // Send the POST request
             var response = await Client.PostAsync(url, content);
-
-            // Ensure successful response status code
             response.EnsureSuccessStatusCode();
 
-            // Read and output the response content
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
+
+            // Parse JSON and extract 'uploader'
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+                if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
+                {
+                    _uploader = uploaderProp.GetString();
+                    _revelarTriedUsers.Clear();
+                    Console.WriteLine("Uploader: " + _uploader);
+                    return _uploader;
+                }
+                else
+                {
+                    Console.WriteLine("No 'uploader' property found in response.");
+                    return null;
+                }
+            }
+            catch (Exception jsonEx)
+            {
+                Console.WriteLine($"Error parsing JSON: {jsonEx.Message}");
+                return null;
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error: {ex.Message}");
+            return null;
         }
     }
     
@@ -479,6 +515,41 @@ class Bot
                 var userId = command.User.Id;
                 var reactionsReceived = GetUserReactionCount(userId);
                 await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
+            }
+
+            else if (command.Data.Name == "revelar")
+            {
+                var userId = command.User.Id;
+                if (_revelarTriedUsers.Contains(userId))
+                {
+                    await command.RespondAsync("Ya has intentado revelar al posteador de esta imagen.", ephemeral: true);
+                    return;
+                }
+                _revelarTriedUsers.Add(userId);
+                var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+
+                if (_uploader == choosenUser)
+                {
+                    await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {_dailyQuizReward} créditos.");
+                    
+                    if (userId != 0)
+                    {
+                        LoadData();
+                    
+                        // Add credits to the user
+                        if (!_userReactionCounts.ContainsKey(userId))
+                        {
+                            _userReactionCounts[userId] = 0;
+                        }
+
+                        _userReactionCounts[userId] += _dailyQuizReward;
+                        SaveData(); // Save updated data to CSV
+                    }
+                }
+                else
+                {
+                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!", ephemeral: true);
+                }
             }
             
             else if (command.Data.Name == "recuerdate")
