@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -314,8 +314,8 @@ private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
                 if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
                 {
                     _uploader = uploaderProp.GetString();
-_revelarTriedUsers.Clear();
-Console.WriteLine("Uploader: " + _uploader);
+                    _revelarTriedUsers.Clear();
+                    Console.WriteLine("Uploader: " + _uploader);
                     return _uploader;
                 }
                 else
