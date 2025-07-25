@@ -41,6 +41,7 @@ class Bot
     private readonly int _dailyQuizReward;
     private static string _uploader;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
+    private static List<ulong> _revelarCorrectUsers = new List<ulong>();
 
     public Bot()
     {
@@ -321,6 +322,7 @@ class Bot
                 {
                     _uploader = uploaderProp.GetString();
                     _revelarTriedUsers.Clear();
+                    _revelarCorrectUsers.Clear();
                     Console.WriteLine("Uploader: " + _uploader);
                     return _uploader;
                 }
@@ -530,19 +532,27 @@ class Bot
 
                 if (_uploader == choosenUser)
                 {
-                    await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {_dailyQuizReward} créditos.");
+                    int reward;
+                    if (_revelarCorrectUsers.Count == 0)
+                        reward = _dailyQuizReward;
+                    else if (_revelarCorrectUsers.Count == 1)
+                        reward = _dailyQuizReward - 15;
+                    else
+                        reward = _dailyQuizReward - 25;
+
+                    _revelarCorrectUsers.Add(userId);
+
+                    await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
                     
                     if (userId != 0)
                     {
                         LoadData();
-                    
                         // Add credits to the user
                         if (!_userReactionCounts.ContainsKey(userId))
                         {
                             _userReactionCounts[userId] = 0;
                         }
-
-                        _userReactionCounts[userId] += _dailyQuizReward;
+                        _userReactionCounts[userId] += reward;
                         SaveData(); // Save updated data to CSV
                     }
                 }
