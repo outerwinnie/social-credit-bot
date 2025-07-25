@@ -530,7 +530,7 @@ class Bot
 
                 if (_uploader == choosenUser)
                 {
-                    await command.RespondAsync($"<@{userId}> ¡Correcto!");
+                    await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {_dailyQuizReward} créditos.");
                     
                     if (userId != 0)
                     {
