@@ -39,6 +39,7 @@ class Bot
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
     private static string _uploader;
+private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
 
     public Bot()
     {
@@ -313,7 +314,8 @@ class Bot
                 if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
                 {
                     _uploader = uploaderProp.GetString();
-                    Console.WriteLine("Uploader: " + _uploader);
+_revelarTriedUsers.Clear();
+Console.WriteLine("Uploader: " + _uploader);
                     return _uploader;
                 }
                 else
@@ -512,6 +514,12 @@ class Bot
             else if (command.Data.Name == "revelar")
             {
                 var userId = command.User.Id;
+                if (_revelarTriedUsers.Contains(userId))
+                {
+                    await command.RespondAsync("Ya has intentado revelar para esta imagen.", ephemeral: true);
+                    return;
+                }
+                _revelarTriedUsers.Add(userId);
                 var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
 
                 if (_uploader == choosenUser)
@@ -520,7 +528,7 @@ class Bot
                 }
                 else
                 {
-                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!");
+                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!", ephemeral: true);
                 }
             }
             
