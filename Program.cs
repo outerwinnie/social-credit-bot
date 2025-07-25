@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -39,10 +39,10 @@ class Bot
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
     private readonly int _dailyQuizReward;
-    private static string _uploader;
+    private static string? _uploader = string.Empty;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private static List<ulong> _revelarCorrectUsers = new List<ulong>();
-    private static readonly string _revelarLeaderboardPath;
+    private static string? _revelarLeaderboardPath;
     private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
     public Bot()
