@@ -573,6 +573,9 @@ class Bot
 
             else if (command.Data.Name == "revelar")
             {
+
+                Console.WriteLine($"Uploader: {_uploader}");
+
                 if (_uploader == null)
                 {
                     await command.RespondAsync("No se ha encontrado un posteador.", ephemeral: true);
