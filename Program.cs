@@ -39,15 +39,19 @@ class Bot
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
     private readonly int _dailyQuizReward;
-    private static string _uploader;
+    private static string? _uploader = string.Empty;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private static List<ulong> _revelarCorrectUsers = new List<ulong>();
+    private static string? _revelarLeaderboardPath;
+    private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
     public Bot()
     {
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+        _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
+        LoadRevelarLeaderboard();
         _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "20:00";
         _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
@@ -86,6 +90,54 @@ class Bot
             .AddSingleton(_client)
             .AddSingleton(interactionService)
             .BuildServiceProvider();
+    }
+
+    // Loads the /revelar leaderboard from a JSON file. Handles missing or corrupted files gracefully.
+    private static void LoadRevelarLeaderboard()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_revelarLeaderboardPath))
+                _revelarLeaderboardPath = "revelar_leaderboard.json";
+            if (!File.Exists(_revelarLeaderboardPath))
+            {
+                _revelarLeaderboard = new Dictionary<ulong, int>();
+                File.WriteAllText(_revelarLeaderboardPath, "{}", Encoding.UTF8);
+                Console.WriteLine($"Leaderboard file not found, created new at '{_revelarLeaderboardPath}'.");
+                return;
+            }
+            var json = File.ReadAllText(_revelarLeaderboardPath, Encoding.UTF8);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                _revelarLeaderboard = new Dictionary<ulong, int>();
+                Console.WriteLine("Leaderboard file was empty, initialized new leaderboard.");
+                return;
+            }
+            _revelarLeaderboard = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, int>>(json) ?? new Dictionary<ulong, int>();
+            Console.WriteLine($"Loaded leaderboard with {_revelarLeaderboard.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading leaderboard: {ex.Message}");
+            _revelarLeaderboard = new Dictionary<ulong, int>();
+        }
+    }
+
+    // Saves the /revelar leaderboard to a JSON file. Handles errors gracefully.
+    private static void SaveRevelarLeaderboard()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_revelarLeaderboardPath))
+                _revelarLeaderboardPath = "revelar_leaderboard.json";
+            var json = System.Text.Json.JsonSerializer.Serialize(_revelarLeaderboard, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_revelarLeaderboardPath, json, Encoding.UTF8);
+            Console.WriteLine($"Leaderboard saved to '{_revelarLeaderboardPath}'.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving leaderboard: {ex.Message}");
+        }
     }
 
     public async Task StartAsync()
@@ -521,6 +573,13 @@ class Bot
 
             else if (command.Data.Name == "revelar")
             {
+
+                if (_uploader == string.Empty)
+                {
+                    await command.RespondAsync("No se ha encontrado un posteador.", ephemeral: true);
+                    return;
+                }
+                
                 var userId = command.User.Id;
                 if (_revelarTriedUsers.Contains(userId))
                 {
@@ -554,6 +613,13 @@ class Bot
                         }
                         _userReactionCounts[userId] += reward;
                         SaveData(); // Save updated data to CSV
+
+                        // Update leaderboard
+                        if (_revelarLeaderboard.ContainsKey(userId))
+                            _revelarLeaderboard[userId]++;
+                        else
+                            _revelarLeaderboard[userId] = 1;
+                        SaveRevelarLeaderboard();
                     }
                 }
                 else
