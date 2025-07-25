@@ -624,7 +624,7 @@ class Bot
                 }
                 else
                 {
-                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!", ephemeral: true);
+                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!");
                 }
             }
             
