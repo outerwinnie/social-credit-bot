@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -38,7 +38,9 @@ class Bot
     private static string _safeKey = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
-    private readonly int _dailyQuizReward;
+    private readonly int _dailyQuizReward_1;
+    private readonly int _dailyQuizReward_2;
+    private readonly int _dailyQuizReward_3;
     private static string? _uploader = string.Empty;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private static List<ulong> _revelarCorrectUsers = new List<ulong>();
@@ -52,7 +54,7 @@ class Bot
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
         _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
         LoadRevelarLeaderboard();
-        _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "20:00";
+        _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "18:00";
         _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
@@ -65,14 +67,19 @@ class Bot
             _preguntarPrice = 25; // Default value if the environment variable is not set or invalid
         }
 
-        if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD"), out _dailyQuizReward))
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_1"), out _dailyQuizReward_1))
         {
-            _dailyQuizReward = 50; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_1 = 35; // Default value if the environment variable is not set or invalid
         }
         
-        if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_2"), out _dailyQuizReward_2))
         {
-            _memePrice = 25; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_2 = 25; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_3"), out _dailyQuizReward_3))
+        {
+            _dailyQuizReward_3 = 15; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
@@ -581,7 +588,7 @@ class Bot
                 }
                 
                 var userId = command.User.Id;
-                if (_revelarTriedUsers.Contains(userId))
+                if (_revelarTriedUsers.Contains(userId) || _revelarCorrectUsers.Contains(userId))
                 {
                     await command.RespondAsync("Ya has intentado revelar al posteador de esta imagen.", ephemeral: true);
                     return;
@@ -593,11 +600,11 @@ class Bot
                 {
                     int reward;
                     if (_revelarCorrectUsers.Count == 0)
-                        reward = _dailyQuizReward;
+                        reward = _dailyQuizReward_1;
                     else if (_revelarCorrectUsers.Count == 1)
-                        reward = _dailyQuizReward - 15;
+                        reward = _dailyQuizReward_2;
                     else
-                        reward = _dailyQuizReward - 25;
+                        reward = _dailyQuizReward_3;
 
                     _revelarCorrectUsers.Add(userId);
 
