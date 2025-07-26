@@ -38,9 +38,9 @@ class Bot
     private static string _safeKey = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
-    private readonly int _dailyQuizReward1;
-    private readonly int _dailyQuizReward2;
-    private readonly int _dailyQuizReward3;
+    private readonly int _dailyQuizReward_1;
+    private readonly int _dailyQuizReward_2;
+    private readonly int _dailyQuizReward_3;
     private static string? _uploader = string.Empty;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private static List<ulong> _revelarCorrectUsers = new List<ulong>();
