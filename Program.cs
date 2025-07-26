@@ -36,6 +36,7 @@ class Bot
     private readonly ulong _adminId;
     private static string _apiUrl = null!;
     private static string _safeKey = null!;
+    private static string _apiChatUrl = null!;
     private readonly string _dailyTaskTime;
     private readonly string _dailyTaskReward;
     private readonly int _dailyQuizReward_1;
@@ -59,6 +60,7 @@ class Bot
         _guildId = ulong.Parse(Environment.GetEnvironmentVariable("GUILD_ID") ?? throw new InvalidOperationException());
         _adminId = ulong.Parse(Environment.GetEnvironmentVariable("ADMIN_USER_ID") ?? throw new InvalidOperationException());
         _apiUrl = (Environment.GetEnvironmentVariable("API_URL") ?? throw new InvalidOperationException());
+        _apiChatUrl = (Environment.GetEnvironmentVariable("API_CHAT_URL") ?? throw new InvalidOperationException());
         _safeKey = Convert.ToString(Environment.GetEnvironmentVariable("SAFE_KEY") ?? throw new InvalidOperationException());
 
         
@@ -406,12 +408,12 @@ class Bot
     
     public static async Task SendChatBotRequestAsync(string requestedUser)
     {
-            // The URL for the GET request
-            var url = $"https://espejito.micuquantic.cc/api?user={requestedUser}&key={_safeKey}";
+            // Build the chatbot API URL using variables for the base and key parameter
+            var apiUrl = $"{_apiChatUrl}{requestedUser}&key={_safeKey}";
             
-            Console.WriteLine(url);
+            Console.WriteLine(apiUrl);
             
-            var response = await Client.GetAsync(url);
+            var response = await Client.GetAsync(apiUrl);
             response.EnsureSuccessStatusCode();
 
             var responseBody = await response.Content.ReadAsStringAsync();
