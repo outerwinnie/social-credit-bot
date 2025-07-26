@@ -43,6 +43,7 @@ ENV DAILY_TASK_REWARD="image"
 ENV DAILY_QUIZ_REWARD_1="35"
 ENV DAILY_QUIZ_REWARD_2="25"
 ENV DAILY_QUIZ_REWARD_3="15"
+ENV API_CHAT_URL=""
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]
