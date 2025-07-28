@@ -280,9 +280,7 @@ class Bot
     {
         var user = _client.GetUser(userId);
         if (user != null)
-            return !string.IsNullOrEmpty(user.Discriminator) && user.Discriminator != "0"
-                ? $"{user.Username}#{user.Discriminator}"
-                : user.Username;
+            return user.Username;
         // fallback: try to fetch from guild
         try
         {
@@ -291,9 +289,7 @@ class Bot
             {
                 var member = guild.GetUser(userId);
                 if (member != null)
-                    return !string.IsNullOrEmpty(member.Discriminator) && member.Discriminator != "0"
-                        ? $"{member.Username}#{member.Discriminator}"
-                        : member.Username;
+                    return member.Username;
             }
         }
         catch { }
@@ -302,9 +298,7 @@ class Bot
         {
             var restUser = await _client.Rest.GetUserAsync(userId);
             if (restUser != null)
-                return !string.IsNullOrEmpty(restUser.Discriminator) && restUser.Discriminator != "0"
-                    ? $"{restUser.Username}#{restUser.Discriminator}"
-                    : restUser.Username;
+                return restUser.Username;
         }
         catch { }
         // fallback: plain id
