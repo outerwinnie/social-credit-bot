@@ -213,7 +213,7 @@ class Bot
                 await Task.Delay(waitTime);
                 try
                 {
-                    await SendLeaderboardAnnouncementAsync();
+                    await SendLeaderboardAnnouncementAsync(true);
                 }
                 catch (Exception ex)
                 {
@@ -224,7 +224,8 @@ class Bot
     }
 
     // Sends the leaderboard as an embed with ASCII table formatting
-    private async Task SendLeaderboardAnnouncementAsync()
+    // If resetAfterSend is true, reset and save the leaderboard after sending
+    private async Task SendLeaderboardAnnouncementAsync(bool resetAfterSend = false)
     {
         var channelIdStr = Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "";
         if (!ulong.TryParse(channelIdStr, out var channelId))
@@ -267,17 +268,13 @@ class Bot
             sb.AppendLine("└─────┴──────────────────────┴─────────┘");
             sb.AppendLine("```");
             var embed = new EmbedBuilder()
-                .WithTitle($":trophy: {DateTime.Now:MMMM} Competition")
+                .WithTitle($":trophy: Competencia de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
                 .WithDescription(sb.ToString())
                 .WithColor(Color.Gold)
                 .Build();
             await targetChannel.SendMessageAsync(embed: embed);
         }
-    }
-
-    // Helper to resolve username (with discriminator if available)
-    private async Task<string> GetUsernameOrMention(ulong userId)
-    {
+        if (resetAfterSend)
         var user = _client.GetUser(userId);
         if (user != null)
             return user.Username;
