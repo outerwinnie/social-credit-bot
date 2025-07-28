@@ -255,7 +255,7 @@ class Bot
             sb.AppendLine("```");
             sb.AppendLine("┌────┬──────────────────────┬───────┐");
             sb.AppendLine("│Pos │Miembro               │Puntos │");
-            sb.AppendLine("├────┼──────────────────────┼───────┤");
+            sb.AppendLine("│                                    │");
             for (int i = 0; i < pageEntries.Count; i++)
             {
                 var entry = pageEntries[i];
@@ -263,9 +263,9 @@ class Bot
                 string username = await GetUsernameOrMention(entry.Key);
                 sb.AppendLine($"│{rank,3} │{username,-20} │{entry.Value,6} │");
                 if (i != pageEntries.Count - 1)
-                    sb.AppendLine("├────┼──────────────────────┼────────┤");
+                    sb.AppendLine("├────────────────────────────────────┤");
             }
-            sb.AppendLine("└────┴──────────────────────┴───────┘");
+            sb.AppendLine("└───────────────────────────────────┘");
             sb.AppendLine("```");
             var embed = new EmbedBuilder()
                 .WithTitle($":trophy: Clasificacion de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
