@@ -165,25 +165,6 @@ class Bot
         await _client.LoginAsync(TokenType.Bot, token);
         await _client.StartAsync();
 
-        // Force download of all guild members for username resolution
-        try
-        {
-            var guild = _client.GetGuild(_guildId);
-            if (guild != null)
-            {
-                Console.WriteLine($"Downloading all users for guild {_guildId}...");
-                await guild.DownloadUsersAsync();
-                Console.WriteLine("All users downloaded.");
-            }
-            else
-            {
-                Console.WriteLine($"Guild not found for ID {_guildId}, cannot download users.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error downloading users: {ex.Message}");
-        }
 
         // Load existing data and ignored users from CSV files
         LoadData();
@@ -340,6 +321,26 @@ class Bot
     {
         // Register slash commands
         await RegisterSlashCommands();
+
+        // Download all guild members after bot is ready
+        try
+        {
+            var guild = _client.GetGuild(_guildId);
+            if (guild != null)
+            {
+                Console.WriteLine($"[Ready] Downloading all users for guild {_guildId}...");
+                await guild.DownloadUsersAsync();
+                Console.WriteLine("[Ready] All users downloaded.");
+            }
+            else
+            {
+                Console.WriteLine($"[Ready] Guild not found for ID {_guildId}, cannot download users.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Ready] Error downloading users: {ex.Message}");
+        }
     }
 
     private async Task RegisterSlashCommands()
