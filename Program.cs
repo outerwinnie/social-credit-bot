@@ -184,6 +184,116 @@ class Bot
         Console.WriteLine($"DAILY_TASK_TIME: {_dailyTaskTime}");
         Console.WriteLine($"DAILY_TASK_REWARD: {_dailyTaskReward}");
 
+        // Schedule monthly leaderboard announcement
+        ScheduleMonthlyLeaderboardAnnouncement();
+    }
+
+    // Schedules leaderboard announcement on the first day of each month at 00:05
+    private void ScheduleMonthlyLeaderboardAnnouncement()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                DateTime now = DateTime.Now;
+                DateTime nextRun = new DateTime(now.Year, now.Month, 1, 0, 5, 0); // 00:05 first day of month
+                if (now >= nextRun)
+                {
+                    // If after the time, schedule for next month
+                    nextRun = nextRun.AddMonths(1);
+                }
+                else if (now.Day != 1 || now.TimeOfDay > new TimeSpan(0,5,0))
+                {
+                    // If not the first day or past 00:05, move to next month
+                    nextRun = new DateTime(now.Year, now.Month, 1, 0, 5, 0).AddMonths(1);
+                }
+                TimeSpan waitTime = nextRun - now;
+                Console.WriteLine($"Monthly leaderboard announcement scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime.TotalMinutes:F1} minutes)");
+                await Task.Delay(waitTime);
+                try
+                {
+                    await SendLeaderboardAnnouncementAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending leaderboard announcement: {ex.Message}");
+                }
+            }
+        });
+    }
+
+    // Sends the leaderboard as an embed with ASCII table formatting
+    private async Task SendLeaderboardAnnouncementAsync()
+    {
+        var channelIdStr = Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "";
+        if (!ulong.TryParse(channelIdStr, out var channelId))
+        {
+            Console.WriteLine("TARGET_CHANNEL_ID not set or invalid. Skipping leaderboard announcement.");
+            return;
+        }
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+        if (targetChannel == null)
+        {
+            Console.WriteLine($"Could not find target channel with ID: {channelId}");
+            return;
+        }
+        if (_revelarLeaderboard.Count == 0)
+        {
+            await targetChannel.SendMessageAsync(":trophy: No leaderboard data for this month!");
+            return;
+        }
+        // Sort leaderboard by points descending, then by user id for tie-break
+        var sorted = _revelarLeaderboard.OrderByDescending(x => x.Value).ThenBy(x => x.Key).ToList();
+        int pageSize = 10;
+        int pageCount = (int)Math.Ceiling(sorted.Count / (double)pageSize);
+        for (int page = 0; page < pageCount; page++)
+        {
+            var pageEntries = sorted.Skip(page * pageSize).Take(pageSize).ToList();
+            var sb = new StringBuilder();
+            sb.AppendLine("```");
+            sb.AppendLine("┌─────┬──────────────────────┬─────────┐");
+            sb.AppendLine("│ Rank│ Member               │ Points  │");
+            sb.AppendLine("├─────┼──────────────────────┼─────────┤");
+            for (int i = 0; i < pageEntries.Count; i++)
+            {
+                var entry = pageEntries[i];
+                int rank = page + 1 + i + page * (pageSize - 1);
+                string mention = await GetUsernameOrMention(entry.Key);
+                sb.AppendLine($"│ {rank,4}│ {mention,-20} │ {entry.Value,7} │");
+                if (i != pageEntries.Count - 1)
+                    sb.AppendLine("├─────┼──────────────────────┼─────────┤");
+            }
+            sb.AppendLine("└─────┴──────────────────────┴─────────┘");
+            sb.AppendLine("```");
+            var embed = new EmbedBuilder()
+                .WithTitle($":trophy: {DateTime.Now:MMMM} Competition")
+                .WithDescription(sb.ToString())
+                .WithColor(Color.Gold)
+                .Build();
+            await targetChannel.SendMessageAsync(embed: embed);
+        }
+    }
+
+    // Helper to resolve username or mention
+    private async Task<string> GetUsernameOrMention(ulong userId)
+    {
+        var user = _client.GetUser(userId);
+        if (user != null)
+            return user.Mention;
+        // fallback: try to fetch from guild
+        try
+        {
+            var guild = _client.GetGuild(_guildId);
+            if (guild != null)
+            {
+                var member = await guild.GetUserAsync(userId);
+                if (member != null)
+                    return member.Mention;
+            }
+        }
+        catch { }
+        // fallback: plain id
+        return $"<@{userId}>";
     }
 
     private Task LogAsync(LogMessage log)
