@@ -278,7 +278,7 @@ class Bot
             {
                 var entry = pageEntries[i];
                 int rank = page + 1 + i + page * (pageSize - 1);
-                string username = GetUsernameOrMention(entry.Key);
+                string username = await GetUsernameOrMention(entry.Key);
                 sb.AppendLine($"│ {rank,4}│ {username,-20} │ {entry.Value,7} │");
                 if (i != pageEntries.Count - 1)
                     sb.AppendLine("├─────┼──────────────────────┼─────────┤");
@@ -295,7 +295,7 @@ class Bot
     }
 
     // Helper to resolve username (with discriminator if available)
-    private string GetUsernameOrMention(ulong userId)
+    private async Task<string> GetUsernameOrMention(ulong userId)
     {
         var user = _client.GetUser(userId);
         if (user != null)
@@ -314,6 +314,16 @@ class Bot
                         ? $"{member.Username}#{member.Discriminator}"
                         : member.Username;
             }
+        }
+        catch { }
+        // fallback: try REST API
+        try
+        {
+            var restUser = await _client.Rest.GetUserAsync(userId);
+            if (restUser != null)
+                return !string.IsNullOrEmpty(restUser.Discriminator) && restUser.Discriminator != "0"
+                    ? $"{restUser.Username}#{restUser.Discriminator}"
+                    : restUser.Username;
         }
         catch { }
         // fallback: plain id
@@ -627,8 +637,9 @@ class Bot
                     await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
                     return;
                 }
+                await command.DeferAsync(ephemeral: true); // Defer immediately
                 await SendLeaderboardAnnouncementAsync();
-                await command.RespondAsync(":trophy: Leaderboard enviado al canal.", ephemeral: true);
+                await command.FollowupAsync(":trophy: Leaderboard enviado al canal.", ephemeral: true);
             }
             else if (command.Data.Name == "añadir")
             {
