@@ -165,6 +165,7 @@ class Bot
         await _client.LoginAsync(TokenType.Bot, token);
         await _client.StartAsync();
 
+
         // Load existing data and ignored users from CSV files
         LoadData();
         LoadIgnoredUsers();
@@ -184,6 +185,125 @@ class Bot
         Console.WriteLine($"DAILY_TASK_TIME: {_dailyTaskTime}");
         Console.WriteLine($"DAILY_TASK_REWARD: {_dailyTaskReward}");
 
+        // Schedule monthly leaderboard announcement
+        ScheduleMonthlyLeaderboardAnnouncement();
+    }
+
+    // Schedules leaderboard announcement on the first day of each month at 00:05
+    private void ScheduleMonthlyLeaderboardAnnouncement()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                DateTime now = DateTime.Now;
+                DateTime nextRun = new DateTime(now.Year, now.Month, 1, 0, 5, 0); // 00:05 first day of month
+                if (now >= nextRun)
+                {
+                    // If after the time, schedule for next month
+                    nextRun = nextRun.AddMonths(1);
+                }
+                else if (now.Day != 1 || now.TimeOfDay > new TimeSpan(0,5,0))
+                {
+                    // If not the first day or past 00:05, move to next month
+                    nextRun = new DateTime(now.Year, now.Month, 1, 0, 5, 0).AddMonths(1);
+                }
+                TimeSpan waitTime = nextRun - now;
+                Console.WriteLine($"Monthly leaderboard announcement scheduled for: {nextRun:yyyy-MM-dd HH:mm:ss} (in {waitTime.TotalMinutes:F1} minutes)");
+                await Task.Delay(waitTime);
+                try
+                {
+                    await SendLeaderboardAnnouncementAsync(true);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending leaderboard announcement: {ex.Message}");
+                }
+            }
+        });
+    }
+
+    // Sends the leaderboard as an embed with ASCII table formatting
+    // If resetAfterSend is true, reset and save the leaderboard after sending
+    private async Task SendLeaderboardAnnouncementAsync(bool resetAfterSend = false)
+    {
+        var channelIdStr = Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "";
+        if (!ulong.TryParse(channelIdStr, out var channelId))
+        {
+            Console.WriteLine("TARGET_CHANNEL_ID not set or invalid. Skipping leaderboard announcement.");
+            return;
+        }
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+        if (targetChannel == null)
+        {
+            Console.WriteLine($"Could not find target channel with ID: {channelId}");
+            return;
+        }
+        if (_revelarLeaderboard.Count == 0)
+        {
+            await targetChannel.SendMessageAsync(":trophy: No leaderboard data for this month!");
+            return;
+        }
+        // Sort leaderboard by points descending, then by user id for tie-break
+        var sorted = _revelarLeaderboard.OrderByDescending(x => x.Value).ThenBy(x => x.Key).ToList();
+        int pageSize = 10;
+        int pageCount = (int)Math.Ceiling(sorted.Count / (double)pageSize);
+        for (int page = 0; page < pageCount; page++)
+        {
+            var pageEntries = sorted.Skip(page * pageSize).Take(pageSize).ToList();
+            var sb = new StringBuilder();
+            sb.AppendLine("```");
+            for (int i = 0; i < pageEntries.Count; i++)
+            {
+                var entry = pageEntries[i];
+                int rank = page + 1 + i + page * (pageSize - 1);
+                string username = await GetUsernameOrMention(entry.Key);
+                sb.AppendLine($"#{rank} - {username} ({entry.Value} puntos)");
+            }
+            sb.AppendLine("```");
+            var embed = new EmbedBuilder()
+                .WithTitle($":trophy: Clasificacion de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
+                .WithDescription(sb.ToString())
+                .WithColor(Color.Gold)
+                .Build();
+            await targetChannel.SendMessageAsync(embed: embed);
+        }
+        if (resetAfterSend)
+        {
+            _revelarLeaderboard.Clear();
+            SaveRevelarLeaderboard();
+            Console.WriteLine("Leaderboard has been reset after monthly announcement.");
+        }
+    }
+
+    // Helper to resolve username (with discriminator if available)
+    private async Task<string> GetUsernameOrMention(ulong userId)
+    {
+        var user = _client.GetUser(userId);
+        if (user != null)
+            return user.Username;
+        // fallback: try to fetch from guild
+        try
+        {
+            var guild = _client.GetGuild(_guildId);
+            if (guild != null)
+            {
+                var member = guild.GetUser(userId);
+                if (member != null)
+                    return member.Username;
+            }
+        }
+        catch { }
+        // fallback: try REST API
+        try
+        {
+            var restUser = await _client.Rest.GetUserAsync(userId);
+            if (restUser != null)
+                return restUser.Username;
+        }
+        catch { }
+        // fallback: plain id
+        return $"{userId}";
     }
 
     private Task LogAsync(LogMessage log)
@@ -196,6 +316,26 @@ class Bot
     {
         // Register slash commands
         await RegisterSlashCommands();
+
+        // Download all guild members after bot is ready
+        try
+        {
+            var guild = _client.GetGuild(_guildId);
+            if (guild != null)
+            {
+                Console.WriteLine($"[Ready] Downloading all users for guild {_guildId}...");
+                await guild.DownloadUsersAsync();
+                Console.WriteLine("[Ready] All users downloaded.");
+            }
+            else
+            {
+                Console.WriteLine($"[Ready] Guild not found for ID {_guildId}, cannot download users.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Ready] Error downloading users: {ex.Message}");
+        }
     }
 
     private async Task RegisterSlashCommands()
@@ -300,6 +440,14 @@ class Bot
         var checkCreditsGuildCommand = checkCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(checkCreditsGuildCommand, _guildId);
         Console.WriteLine("Slash command 'saldo' registered for the guild.");
+
+        // Manual leaderboard trigger (admin only)
+        var leaderboardCommand = new SlashCommandBuilder()
+            .WithName("leaderboard")
+            .WithDescription("Envía el leaderboard manualmente (solo admin)");
+        var leaderboardGuildCommand = leaderboardCommand.Build();
+        await _client.Rest.CreateGuildCommand(leaderboardGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'leaderboard' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -477,6 +625,18 @@ class Bot
                 }
             }
             
+            else if (command.Data.Name == "leaderboard")
+            {
+                ulong authorizedUserId = _adminId;
+                if (command.User.Id != authorizedUserId)
+                {
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+                await command.DeferAsync(ephemeral: true); // Defer immediately
+                await SendLeaderboardAnnouncementAsync();
+                await command.FollowupAsync(":trophy: Leaderboard enviado al canal.", ephemeral: true);
+            }
             else if (command.Data.Name == "añadir")
             {
                 var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
