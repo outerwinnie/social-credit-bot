@@ -253,7 +253,7 @@ class Bot
             var sb = new StringBuilder();
             sb.AppendLine("```");
             sb.AppendLine("┌─────┬──────────────────────┬─────────┐");
-            sb.AppendLine("│ Rank│ Member               │ Points  │");
+            sb.AppendLine("│ Pos │ Miembro              │ Puntos  │");
             sb.AppendLine("├─────┼──────────────────────┼─────────┤");
             for (int i = 0; i < pageEntries.Count; i++)
             {
