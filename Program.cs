@@ -275,6 +275,16 @@ class Bot
             await targetChannel.SendMessageAsync(embed: embed);
         }
         if (resetAfterSend)
+        {
+            _revelarLeaderboard.Clear();
+            SaveRevelarLeaderboard();
+            Console.WriteLine("Leaderboard has been reset after monthly announcement.");
+        }
+    }
+
+    // Helper to resolve username (with discriminator if available)
+    private async Task<string> GetUsernameOrMention(ulong userId)
+    {
         var user = _client.GetUser(userId);
         if (user != null)
             return user.Username;
