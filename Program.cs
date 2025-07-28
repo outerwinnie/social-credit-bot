@@ -268,7 +268,7 @@ class Bot
             sb.AppendLine("└─────┴──────────────────────┴─────────┘");
             sb.AppendLine("```");
             var embed = new EmbedBuilder()
-                .WithTitle($":trophy: Competencia de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
+                .WithTitle($":trophy: Clasificacion de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
                 .WithDescription(sb.ToString())
                 .WithColor(Color.Gold)
                 .Build();
