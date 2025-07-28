@@ -21,7 +21,7 @@ class Program
 
 class Bot
 {
-    private readonly DiscordSocketClient _client = new DiscordSocketClient();
+    private readonly DiscordSocketClient _client;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
     private readonly string _rewardsFilePath;
@@ -50,6 +50,11 @@ class Bot
 
     public Bot()
     {
+        var config = new DiscordSocketConfig
+        {
+            GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers
+        };
+        _client = new DiscordSocketClient(config);
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
