@@ -258,7 +258,7 @@ class Bot
             {
                 var entry = pageEntries[i];
                 int rank = page + 1 + i + page * (pageSize - 1);
-                string mention = await GetUsernameOrMention(entry.Key);
+                string mention = GetUsernameOrMention(entry.Key);
                 sb.AppendLine($"│ {rank,4}│ {mention,-20} │ {entry.Value,7} │");
                 if (i != pageEntries.Count - 1)
                     sb.AppendLine("├─────┼──────────────────────┼─────────┤");
@@ -275,7 +275,7 @@ class Bot
     }
 
     // Helper to resolve username or mention
-    private async Task<string> GetUsernameOrMention(ulong userId)
+    private string GetUsernameOrMention(ulong userId)
     {
         var user = _client.GetUser(userId);
         if (user != null)
@@ -286,7 +286,7 @@ class Bot
             var guild = _client.GetGuild(_guildId);
             if (guild != null)
             {
-                var member = await guild.GetUserAsync(userId);
+                var member = guild.GetUser(userId);
                 if (member != null)
                     return member.Mention;
             }
