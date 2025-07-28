@@ -258,8 +258,8 @@ class Bot
             {
                 var entry = pageEntries[i];
                 int rank = page + 1 + i + page * (pageSize - 1);
-                string mention = GetUsernameOrMention(entry.Key);
-                sb.AppendLine($"│ {rank,4}│ {mention,-20} │ {entry.Value,7} │");
+                string username = GetUsernameOrMention(entry.Key);
+                sb.AppendLine($"│ {rank,4}│ {username,-20} │ {entry.Value,7} │");
                 if (i != pageEntries.Count - 1)
                     sb.AppendLine("├─────┼──────────────────────┼─────────┤");
             }
@@ -274,12 +274,14 @@ class Bot
         }
     }
 
-    // Helper to resolve username or mention
+    // Helper to resolve username (with discriminator if available)
     private string GetUsernameOrMention(ulong userId)
     {
         var user = _client.GetUser(userId);
         if (user != null)
-            return user.Mention;
+            return !string.IsNullOrEmpty(user.Discriminator) && user.Discriminator != "0"
+                ? $"{user.Username}#{user.Discriminator}"
+                : user.Username;
         // fallback: try to fetch from guild
         try
         {
@@ -288,12 +290,14 @@ class Bot
             {
                 var member = guild.GetUser(userId);
                 if (member != null)
-                    return member.Mention;
+                    return !string.IsNullOrEmpty(member.Discriminator) && member.Discriminator != "0"
+                        ? $"{member.Username}#{member.Discriminator}"
+                        : member.Username;
             }
         }
         catch { }
         // fallback: plain id
-        return $"<@{userId}>";
+        return $"{userId}";
     }
 
     private Task LogAsync(LogMessage log)
