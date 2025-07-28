@@ -410,6 +410,14 @@ class Bot
         var checkCreditsGuildCommand = checkCreditsCommand.Build();
         await _client.Rest.CreateGuildCommand(checkCreditsGuildCommand, _guildId);
         Console.WriteLine("Slash command 'saldo' registered for the guild.");
+
+        // Manual leaderboard trigger (admin only)
+        var leaderboardCommand = new SlashCommandBuilder()
+            .WithName("leaderboard")
+            .WithDescription("Envía el leaderboard manualmente (solo admin)");
+        var leaderboardGuildCommand = leaderboardCommand.Build();
+        await _client.Rest.CreateGuildCommand(leaderboardGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'leaderboard' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -587,6 +595,17 @@ class Bot
                 }
             }
             
+            else if (command.Data.Name == "leaderboard")
+            {
+                ulong authorizedUserId = _adminId;
+                if (command.User.Id != authorizedUserId)
+                {
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+                await SendLeaderboardAnnouncementAsync();
+                await command.RespondAsync(":trophy: Leaderboard enviado al canal.", ephemeral: true);
+            }
             else if (command.Data.Name == "añadir")
             {
                 var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
