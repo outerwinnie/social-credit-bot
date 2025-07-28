@@ -253,9 +253,9 @@ class Bot
             var pageEntries = sorted.Skip(page * pageSize).Take(pageSize).ToList();
             var sb = new StringBuilder();
             sb.AppendLine("```");
-            sb.AppendLine("┌────┬──────────────────────┬────────┐");
-            sb.AppendLine("│Pos │Miembro               │Puntos  │");
-            sb.AppendLine("├────┼──────────────────────┼────────┤");
+            sb.AppendLine("┌────┬──────────────────────┬───────┐");
+            sb.AppendLine("│Pos │Miembro               │Puntos │");
+            sb.AppendLine("├────┼──────────────────────┼───────┤");
             for (int i = 0; i < pageEntries.Count; i++)
             {
                 var entry = pageEntries[i];
@@ -265,7 +265,7 @@ class Bot
                 if (i != pageEntries.Count - 1)
                     sb.AppendLine("├────┼──────────────────────┼────────┤");
             }
-            sb.AppendLine("└────┴──────────────────────┴────────┘");
+            sb.AppendLine("└────┴──────────────────────┴───────┘");
             sb.AppendLine("```");
             var embed = new EmbedBuilder()
                 .WithTitle($":trophy: Clasificacion de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
