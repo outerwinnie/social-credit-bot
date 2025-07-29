@@ -815,7 +815,7 @@ class Bot
                         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
                         if (targetChannel != null)
                         {
-                            await targetChannel.SendMessageAsync(":tada: ¡Se han alcanzado 3 ganadores! Comienza una nueva ronda...");
+                            await targetChannel.SendMessageAsync(":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: {_uploader}. Comienza una nueva ronda...");
                         }
                         await SendPostRequestAsync("image");
                     }
