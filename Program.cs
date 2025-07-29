@@ -45,11 +45,69 @@ class Bot
     private static string? _uploader = string.Empty;
     private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private static List<ulong> _revelarCorrectUsers = new List<ulong>();
+    private readonly string _quizStatePath; // now instance field
+
+    private class QuizState
+    {
+        public string? Uploader { get; set; }
+        public List<ulong> CorrectUsers { get; set; } = new List<ulong>();
+        public List<ulong> TriedUsers { get; set; } = new List<ulong>();
+    }
+
+    private void SaveQuizState()
+    {
+        try
+        {
+            var state = new QuizState
+            {
+                Uploader = _uploader,
+                CorrectUsers = new List<ulong>(_revelarCorrectUsers),
+                TriedUsers = new List<ulong>(_revelarTriedUsers)
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(state, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_quizStatePath, json, Encoding.UTF8);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving quiz state: {ex.Message}");
+        }
+    }
+
+    private void LoadQuizState()
+    {
+        try
+        {
+            if (!File.Exists(_quizStatePath))
+            {
+                _uploader = string.Empty;
+                _revelarCorrectUsers.Clear();
+                _revelarTriedUsers.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_quizStatePath, Encoding.UTF8);
+            var state = System.Text.Json.JsonSerializer.Deserialize<QuizState>(json);
+            if (state != null)
+            {
+                _uploader = state.Uploader ?? string.Empty;
+                _revelarCorrectUsers = state.CorrectUsers ?? new List<ulong>();
+                _revelarTriedUsers = state.TriedUsers != null ? new HashSet<ulong>(state.TriedUsers) : new HashSet<ulong>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading quiz state: {ex.Message}");
+            _uploader = string.Empty;
+            _revelarCorrectUsers.Clear();
+            _revelarTriedUsers.Clear();
+        }
+    }
     private static string? _revelarLeaderboardPath;
     private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
     public Bot()
     {
+        _quizStatePath = Environment.GetEnvironmentVariable("QUIZ_STATE_PATH") ?? "quiz_state.json";
+        LoadQuizState();
         var config = new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers
@@ -542,12 +600,14 @@ class Bot
                     _uploader = uploaderProp.GetString();
                     _revelarTriedUsers.Clear();
                     _revelarCorrectUsers.Clear();
+                    SaveQuizState();
                     Console.WriteLine("Uploader: " + _uploader);
                     return _uploader;
                 }
                 else
                 {
                     Console.WriteLine("No 'uploader' property found in response.");
+{{ ... }}
                     return null;
                 }
             }
@@ -805,6 +865,7 @@ class Bot
                         else
                             _revelarLeaderboard[userId] = 1;
                         SaveRevelarLeaderboard();
+                        SaveQuizState(); // Save quiz state after correct answer
                     }
 
                     // After rewarding, check if this was the third winner
@@ -818,6 +879,7 @@ class Bot
                             await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
                         }
                         await SendPostRequestAsync("image");
+                        SaveQuizState(); // Save after new round/image
                     }
                 }
                 else

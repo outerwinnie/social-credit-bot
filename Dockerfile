@@ -44,6 +44,7 @@ ENV DAILY_QUIZ_REWARD_1="18"
 ENV DAILY_QUIZ_REWARD_2="10"
 ENV DAILY_QUIZ_REWARD_3="5"
 ENV API_CHAT_URL=""
+ENV QUIZ_STATE_PATH="/app/quiz_state.json"
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]
