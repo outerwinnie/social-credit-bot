@@ -511,6 +511,24 @@ class Bot
         await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
         Console.WriteLine($"Slash command 'revelar' registered for the guild.");
 
+        var giftCommand = new SlashCommandBuilder()
+            .WithName("regalar")
+            .WithDescription($"Regala créditos a un usuario")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario a regalar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a regalar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var giftGuildCommand = giftCommand.Build();
+        await _client.Rest.CreateGuildCommand(giftGuildCommand, _guildId);
+        Console.WriteLine($"Slash command 'regalar' registered for the guild.");
+
         var checkCreditsCommand = new SlashCommandBuilder()
             .WithName("saldo")
             .WithDescription("Comprueba tu saldo disponible");
@@ -962,7 +980,65 @@ class Bot
                 }
             }
             
-            else if (command.Data.Name == "meme")
+            else if (command.Data.Name == "regalar")
+{
+    var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+    var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+    if (userOption == null || amountOption == null)
+    {
+        await command.RespondAsync("No es posible, comprueba los parametros.", ephemeral: true);
+        return;
+    }
+
+    ulong senderId = command.User.Id;
+    ulong recipientId = (userOption.Value as SocketUser)?.Id ?? 0;
+    int amount = 0;
+    if (!int.TryParse(amountOption.Value?.ToString(), out amount) || amount <= 0)
+    {
+        await command.RespondAsync("La cantidad debe ser un numero positivo.", ephemeral: true);
+        return;
+    }
+    if (recipientId == 0)
+    {
+        await command.RespondAsync("Usuario destino invalido.", ephemeral: true);
+        return;
+    }
+    if (senderId == recipientId)
+    {
+        await command.RespondAsync("No puedes regalarte creditos a ti mismo.", ephemeral: true);
+        return;
+    }
+
+    LoadData();
+    if (!_userReactionCounts.ContainsKey(senderId) || _userReactionCounts[senderId] < amount)
+    {
+        await command.RespondAsync($"No tienes suficientes creditos para regalar {amount}.", ephemeral: true);
+        return;
+    }
+
+    // Subtract from sender
+    _userReactionCounts[senderId] -= amount;
+    // Add to recipient
+    if (!_userReactionCounts.ContainsKey(recipientId))
+        _userReactionCounts[recipientId] = 0;
+    _userReactionCounts[recipientId] += amount;
+    SaveData();
+
+    // Confirmation to sender
+    await command.RespondAsync($"Has regalado {amount} creditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
+
+    // Notify recipient in channel
+    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+    if (targetChannel != null)
+    {
+        await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} creditos a <@{recipientId}>!");
+    }
+
+    Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} creditos");
+}
+else if (command.Data.Name == "meme")
             {
                 var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
                 
