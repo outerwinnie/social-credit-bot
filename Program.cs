@@ -378,7 +378,7 @@ class Bot
         
         var addCreditsCommand = new SlashCommandBuilder()
             .WithName("añadir")
-            .WithDescription("Añade créditos a un usuario")
+            .WithDescription("Añade créditos a un usuario (solo admin)")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("ID del usuario al que añadir créditos")
@@ -396,7 +396,7 @@ class Bot
         
         var removeCreditsCommand = new SlashCommandBuilder()
             .WithName("descontar")
-            .WithDescription("Descuenta créditos a un usuario")
+            .WithDescription("Descuenta créditos a un usuario (solo admin)")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("ID del usuario al que descontar créditos")
