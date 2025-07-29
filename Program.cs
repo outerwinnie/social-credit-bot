@@ -42,9 +42,71 @@ class Bot
     private readonly int _dailyQuizReward_1;
     private readonly int _dailyQuizReward_2;
     private readonly int _dailyQuizReward_3;
-    private static string? _uploader = string.Empty;
-    private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
-    private static List<ulong> _revelarCorrectUsers = new List<ulong>();
+    private string? _uploader = string.Empty;
+    private HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
+    private List<ulong> _revelarCorrectUsers = new List<ulong>();
+    private readonly string _quizStatePath; // now instance field
+
+    private class QuizState
+    {
+        public string? Uploader { get; set; }
+        public List<ulong> CorrectUsers { get; set; } = new List<ulong>();
+        public List<ulong> TriedUsers { get; set; } = new List<ulong>();
+    }
+
+    private void SaveQuizState()
+    {
+        try
+        {
+            var state = new QuizState
+            {
+                Uploader = _uploader,
+                CorrectUsers = new List<ulong>(_revelarCorrectUsers),
+                TriedUsers = new List<ulong>(_revelarTriedUsers)
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(state, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            // Ensure directory exists before writing (handles custom paths)
+            var dir = Path.GetDirectoryName(_quizStatePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(_quizStatePath, json, Encoding.UTF8); // This will create or overwrite the file
+            if (!File.Exists(_quizStatePath))
+                Console.WriteLine($"Quiz state file was not created: {_quizStatePath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving quiz state: {ex.Message}");
+        }
+    }
+
+    private void LoadQuizState()
+    {
+        try
+        {
+            if (!File.Exists(_quizStatePath))
+            {
+                _uploader = string.Empty;
+                _revelarCorrectUsers.Clear();
+                _revelarTriedUsers.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_quizStatePath, Encoding.UTF8);
+            var state = System.Text.Json.JsonSerializer.Deserialize<QuizState>(json);
+            if (state != null)
+            {
+                _uploader = state.Uploader ?? string.Empty;
+                _revelarCorrectUsers = state.CorrectUsers ?? new List<ulong>();
+                _revelarTriedUsers = state.TriedUsers != null ? new HashSet<ulong>(state.TriedUsers) : new HashSet<ulong>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading quiz state: {ex.Message}");
+            _uploader = string.Empty;
+            _revelarCorrectUsers.Clear();
+            _revelarTriedUsers.Clear();
+        }
+    }
     private static string? _revelarLeaderboardPath;
     private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
@@ -54,6 +116,9 @@ class Bot
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers
         };
+        
+        _quizStatePath = Environment.GetEnvironmentVariable("QUIZ_STATE_PATH") ?? "quiz_state.json";
+        LoadQuizState();
         _client = new DiscordSocketClient(config);
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
@@ -71,22 +136,27 @@ class Bot
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
         {
-            _preguntarPrice = 25; // Default value if the environment variable is not set or invalid
+            _preguntarPrice = 30; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
+        {
+            _memePrice = 25; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_1"), out _dailyQuizReward_1))
         {
-            _dailyQuizReward_1 = 35; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_1 =18; // Default value if the environment variable is not set or invalid
         }
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_2"), out _dailyQuizReward_2))
         {
-            _dailyQuizReward_2 = 25; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_2 = 10; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_3"), out _dailyQuizReward_3))
         {
-            _dailyQuizReward_3 = 15; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_3 = 5; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
@@ -104,6 +174,9 @@ class Bot
             .AddSingleton(_client)
             .AddSingleton(interactionService)
             .BuildServiceProvider();
+
+    // Ensure quiz state file exists on startup
+    SaveQuizState();
     }
 
     // Loads the /revelar leaderboard from a JSON file. Handles missing or corrupted files gracefully.
@@ -373,7 +446,7 @@ class Bot
         
         var addCreditsCommand = new SlashCommandBuilder()
             .WithName("añadir")
-            .WithDescription("Añade créditos a un usuario")
+            .WithDescription("Añade créditos a un usuario (solo admin)")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("ID del usuario al que añadir créditos")
@@ -391,7 +464,7 @@ class Bot
         
         var removeCreditsCommand = new SlashCommandBuilder()
             .WithName("descontar")
-            .WithDescription("Descuenta créditos a un usuario")
+            .WithDescription("Descuenta créditos a un usuario (solo admin)")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("ID del usuario al que descontar créditos")
@@ -512,7 +585,7 @@ class Bot
     
     private static readonly HttpClient Client = new HttpClient();
 
-    public static async Task<string?> SendPostRequestAsync(string reward)
+    public async Task<string?> SendPostRequestAsync(string reward)
     {
         try
         {
@@ -534,11 +607,17 @@ class Bot
                 using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
                 if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
                 {
-                    _uploader = uploaderProp.GetString();
-                    _revelarTriedUsers.Clear();
-                    _revelarCorrectUsers.Clear();
-                    Console.WriteLine("Uploader: " + _uploader);
-                    return _uploader;
+                    this._uploader = uploaderProp.GetString();
+                    this._revelarTriedUsers.Clear();
+                    this._revelarCorrectUsers.Clear();
+                    // SaveQuizState is an instance method, so we need a reference to the current Bot instance.
+                // If this is called from an instance method, use this.SaveQuizState();
+                // If called from a static method, you must pass the Bot instance as a parameter.
+                // For now, comment this out and add a TODO for proper refactor.
+                // SaveQuizState();
+                Console.WriteLine("Uploader: " + _uploader);
+                // TODO: Call SaveQuizState() from the Bot instance after SendPostRequestAsync completes.
+                    return this._uploader;
                 }
                 else
                 {
@@ -765,6 +844,12 @@ class Bot
 
                 if (_uploader == choosenUser)
                 {
+                    if (_revelarCorrectUsers.Count >= 3)
+                    {
+                        await command.RespondAsync("Ya hay 3 ganadores para esta ronda. Espera la siguiente imagen para participar de nuevo.", ephemeral: true);
+                        return;
+                    }
+
                     int reward;
                     if (_revelarCorrectUsers.Count == 0)
                         reward = _dailyQuizReward_1;
@@ -776,7 +861,7 @@ class Bot
                     _revelarCorrectUsers.Add(userId);
 
                     await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
-                    
+
                     if (userId != 0)
                     {
                         LoadData();
@@ -794,6 +879,21 @@ class Bot
                         else
                             _revelarLeaderboard[userId] = 1;
                         SaveRevelarLeaderboard();
+                        SaveQuizState(); // Save quiz state after correct answer
+                    }
+
+                    // After rewarding, check if this was the third winner
+                    if (_revelarCorrectUsers.Count == 3)
+                    {
+                        // Announce new round and send new image
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        if (targetChannel != null)
+                        {
+                            await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
+                        }
+                        await SendPostRequestAsync("image");
+                        SaveQuizState(); // Save after new round/image
                     }
                 }
                 else
