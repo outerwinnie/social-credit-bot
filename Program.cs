@@ -106,12 +106,13 @@ class Bot
 
     public Bot()
     {
-        _quizStatePath = Environment.GetEnvironmentVariable("QUIZ_STATE_PATH") ?? "quiz_state.json";
-        LoadQuizState();
         var config = new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers
         };
+        
+        _quizStatePath = Environment.GetEnvironmentVariable("QUIZ_STATE_PATH") ?? "quiz_state.json";
+        LoadQuizState();
         _client = new DiscordSocketClient(config);
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
