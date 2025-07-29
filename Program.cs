@@ -608,7 +608,6 @@ class Bot
                 else
                 {
                     Console.WriteLine("No 'uploader' property found in response.");
-{{ ... }}
                     return null;
                 }
             }
