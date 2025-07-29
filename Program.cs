@@ -585,7 +585,7 @@ class Bot
     
     private static readonly HttpClient Client = new HttpClient();
 
-    public static async Task<string?> SendPostRequestAsync(string reward)
+    public async Task<string?> SendPostRequestAsync(string reward)
     {
         try
         {
@@ -607,9 +607,9 @@ class Bot
                 using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
                 if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
                 {
-                    _uploader = uploaderProp.GetString();
-                    _revelarTriedUsers.Clear();
-                    _revelarCorrectUsers.Clear();
+                    this._uploader = uploaderProp.GetString();
+                    this._revelarTriedUsers.Clear();
+                    this._revelarCorrectUsers.Clear();
                     // SaveQuizState is an instance method, so we need a reference to the current Bot instance.
                 // If this is called from an instance method, use this.SaveQuizState();
                 // If called from a static method, you must pass the Bot instance as a parameter.
@@ -617,7 +617,7 @@ class Bot
                 // SaveQuizState();
                 Console.WriteLine("Uploader: " + _uploader);
                 // TODO: Call SaveQuizState() from the Bot instance after SendPostRequestAsync completes.
-                    return _uploader;
+                    return this._uploader;
                 }
                 else
                 {
