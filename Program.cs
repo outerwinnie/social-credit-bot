@@ -42,9 +42,9 @@ class Bot
     private readonly int _dailyQuizReward_1;
     private readonly int _dailyQuizReward_2;
     private readonly int _dailyQuizReward_3;
-    private static string? _uploader = string.Empty;
-    private static HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
-    private static List<ulong> _revelarCorrectUsers = new List<ulong>();
+    private string? _uploader = string.Empty;
+    private HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
+    private List<ulong> _revelarCorrectUsers = new List<ulong>();
     private readonly string _quizStatePath; // now instance field
 
     private class QuizState
@@ -174,6 +174,9 @@ class Bot
             .AddSingleton(_client)
             .AddSingleton(interactionService)
             .BuildServiceProvider();
+
+    // Ensure quiz state file exists on startup
+    SaveQuizState();
     }
 
     // Loads the /revelar leaderboard from a JSON file. Handles missing or corrupted files gracefully.
