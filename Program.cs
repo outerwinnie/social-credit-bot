@@ -65,7 +65,13 @@ class Bot
                 TriedUsers = new List<ulong>(_revelarTriedUsers)
             };
             var json = System.Text.Json.JsonSerializer.Serialize(state, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_quizStatePath, json, Encoding.UTF8);
+            // Ensure directory exists before writing (handles custom paths)
+            var dir = Path.GetDirectoryName(_quizStatePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(_quizStatePath, json, Encoding.UTF8); // This will create or overwrite the file
+            if (!File.Exists(_quizStatePath))
+                Console.WriteLine($"Quiz state file was not created: {_quizStatePath}");
         }
         catch (Exception ex)
         {
