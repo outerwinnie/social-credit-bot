@@ -71,22 +71,27 @@ class Bot
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("PREGUNTAR_PRICE"), out _preguntarPrice))
         {
-            _preguntarPrice = 25; // Default value if the environment variable is not set or invalid
+            _preguntarPrice = 30; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
+        {
+            _memePrice = 25; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_1"), out _dailyQuizReward_1))
         {
-            _dailyQuizReward_1 = 35; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_1 =18; // Default value if the environment variable is not set or invalid
         }
         
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_2"), out _dailyQuizReward_2))
         {
-            _dailyQuizReward_2 = 25; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_2 = 10; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_3"), out _dailyQuizReward_3))
         {
-            _dailyQuizReward_3 = 15; // Default value if the environment variable is not set or invalid
+            _dailyQuizReward_3 = 5; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("REACTION_INCREMENT"), out _reactionIncrement))
@@ -765,6 +770,12 @@ class Bot
 
                 if (_uploader == choosenUser)
                 {
+                    if (_revelarCorrectUsers.Count >= 3)
+                    {
+                        await command.RespondAsync("Ya hay 3 ganadores para esta ronda. Espera la siguiente imagen para participar de nuevo.", ephemeral: true);
+                        return;
+                    }
+
                     int reward;
                     if (_revelarCorrectUsers.Count == 0)
                         reward = _dailyQuizReward_1;
@@ -776,7 +787,7 @@ class Bot
                     _revelarCorrectUsers.Add(userId);
 
                     await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
-                    
+
                     if (userId != 0)
                     {
                         LoadData();
@@ -794,6 +805,19 @@ class Bot
                         else
                             _revelarLeaderboard[userId] = 1;
                         SaveRevelarLeaderboard();
+                    }
+
+                    // After rewarding, check if this was the third winner
+                    if (_revelarCorrectUsers.Count == 3)
+                    {
+                        // Announce new round and send new image
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        if (targetChannel != null)
+                        {
+                            await targetChannel.SendMessageAsync(":tada: ¡Se han alcanzado 3 ganadores! Comienza una nueva ronda...");
+                        }
+                        await SendPostRequestAsync("image");
                     }
                 }
                 else
