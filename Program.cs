@@ -569,7 +569,7 @@ class Bot
 
         var voteCommand = new SlashCommandBuilder()
             .WithName("votar")
-            .WithDescription($"Vota por el usuario que crees que tendra el primer puesto en la clasificacion, y apuesta un numero de creditos")
+            .WithDescription("Vota por el usuario que crees que ganará y apuesta créditos")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a votar")
