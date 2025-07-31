@@ -965,7 +965,6 @@ private void ScheduleDailyTask()
                     return;
                 }
 
-            {
                 var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
                 
                 // Default multiplier is 1 if "cantidad" is not provided or invalid
