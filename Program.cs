@@ -69,6 +69,8 @@ class Bot
             var dir = Path.GetDirectoryName(_quizStatePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
+            Console.WriteLine($"[DEBUG] Attempting to write quiz state to: {_quizStatePath}");
+            Console.WriteLine($"[DEBUG] Current Directory: {Directory.GetCurrentDirectory()}");
             File.WriteAllText(_quizStatePath, json, Encoding.UTF8); // This will create or overwrite the file
             if (!File.Exists(_quizStatePath))
                 Console.WriteLine($"Quiz state file was not created: {_quizStatePath}");
