@@ -1046,6 +1046,9 @@ else if (command.Data.Name == "descontar")
                     return;
                 }
                 _revelarTriedUsers.Add(userId);
+                Console.WriteLine($"[DEBUG] User {userId} added to _revelarTriedUsers. Saving quiz state...");
+                SaveQuizState();
+                Console.WriteLine($"[DEBUG] Quiz state saved after user {userId} failed quiz.");
                 var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
 
                 if (_uploader == choosenUser)
