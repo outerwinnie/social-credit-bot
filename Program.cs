@@ -110,6 +110,9 @@ class Bot
     private static string? _revelarLeaderboardPath;
     private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
+    private readonly string _votesFilePath;
+    private List<VoteRecord> _votes = new List<VoteRecord>();
+
     public Bot()
     {
         var config = new DiscordSocketConfig
@@ -123,6 +126,8 @@ class Bot
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+        _votesFilePath = Environment.GetEnvironmentVariable("VOTES_FILE_PATH") ?? "votes.csv";
+        LoadVotes();
         _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
         LoadRevelarLeaderboard();
         _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "18:00";
@@ -178,6 +183,57 @@ class Bot
     // Ensure quiz state file exists on startup
     SaveQuizState();
     }
+
+    private void LoadVotes()
+    {
+        try
+        {
+            if (!File.Exists(_votesFilePath))
+            {
+                using (var writer = new StreamWriter(_votesFilePath))
+                using (var csvWriter = new CsvWriter(writer, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)))
+                {
+                    csvWriter.WriteHeader<VoteRecord>();
+                    csvWriter.NextRecord();
+                }
+                _votes = new List<VoteRecord>();
+                return;
+            }
+            using (var reader = new StreamReader(_votesFilePath))
+            using (var csv = new CsvReader(reader, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)))
+            {
+                _votes = csv.GetRecords<VoteRecord>().ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading votes: {ex.Message}");
+            _votes = new List<VoteRecord>();
+        }
+    }
+
+    private void SaveVotes()
+    {
+        try
+        {
+            using (var writer = new StreamWriter(_votesFilePath))
+            using (var csv = new CsvWriter(writer, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)))
+            {
+                csv.WriteHeader<VoteRecord>();
+                csv.NextRecord();
+                foreach (var vote in _votes)
+                {
+                    csv.WriteRecord(vote);
+                    csv.NextRecord();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving votes: {ex.Message}");
+        }
+    }
+
 
     // Loads the /revelar leaderboard from a JSON file. Handles missing or corrupted files gracefully.
     private static void LoadRevelarLeaderboard()
@@ -591,7 +647,7 @@ class Bot
                         }
                         else
                         {
-                            await targetChannel.SendMessageAsync(":ballot_box: ¡Mañana es día de votación! ¡Participa y vota por quién crees que ganará este mes!");
+                            await targetChannel.SendMessageAsync(":ballot_box: ¡Hoy es dia de votacion! ¡Participa y vota por quien crees que ganara este mes!");
                             Console.WriteLine("Votation day announcement sent.");
                         }
                     }
@@ -1057,6 +1113,66 @@ private void ScheduleDailyTask()
                 }
             }
             
+            else if (command.Data.Name == "votar")
+            {
+                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+                var betOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad" || o.Name == "bet" || o.Name == "apuesta");
+
+                if (userOption == null)
+                {
+                    await command.RespondAsync("Debes especificar el usuario a votar.", ephemeral: true);
+                    return;
+                }
+
+                var votedForUser = userOption.Value as SocketUser;
+                if (votedForUser == null)
+                {
+                    await command.RespondAsync("Usuario inválido para votar.", ephemeral: true);
+                    return;
+                }
+
+                ulong voterId = command.User.Id;
+                ulong votedForId = votedForUser.Id;
+
+                if (voterId == votedForId)
+                {
+                    await command.RespondAsync("No puedes votar por ti mismo.", ephemeral: true);
+                    return;
+                }
+
+                int betAmount = 1; // Default bet if not present
+                if (betOption != null && int.TryParse(betOption.Value?.ToString(), out int parsedBet))
+                {
+                    betAmount = parsedBet;
+                }
+                if (betAmount <= 0)
+                {
+                    await command.RespondAsync("La cantidad apostada debe ser un número positivo.", ephemeral: true);
+                    return;
+                }
+
+                // Load votes from CSV to ensure up-to-date
+                LoadVotes();
+                var existingVote = _votes.FirstOrDefault(v => v.VoterId == voterId && v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year);
+                if (existingVote != null)
+                {
+                    existingVote.VotedForId = votedForId;
+                    existingVote.BetAmount = betAmount;
+                    existingVote.Timestamp = DateTime.Now;
+                }
+                else
+                {
+                    _votes.Add(new VoteRecord
+                    {
+                        VoterId = voterId,
+                        VotedForId = votedForId,
+                        BetAmount = betAmount,
+                        Timestamp = DateTime.Now
+                    });
+                }
+                SaveVotes();
+                await command.RespondAsync($"Tu voto por <@{votedForId}> con una apuesta de {betAmount} ha sido registrado.", ephemeral: true);
+            }
             else if (command.Data.Name == "regalar")
 {
     var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
