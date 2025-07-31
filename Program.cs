@@ -815,13 +815,8 @@ private void ScheduleDailyTask()
                     this._uploader = uploaderProp.GetString();
                     this._revelarTriedUsers.Clear();
                     this._revelarCorrectUsers.Clear();
-                    // SaveQuizState is an instance method, so we need a reference to the current Bot instance.
-                // If this is called from an instance method, use this.SaveQuizState();
-                // If called from a static method, you must pass the Bot instance as a parameter.
-                // For now, comment this out and add a TODO for proper refactor.
-                // SaveQuizState();
-                Console.WriteLine("Uploader: " + _uploader);
-                // TODO: Call SaveQuizState() from the Bot instance after SendPostRequestAsync completes.
+                    SaveQuizState(); // Now persist the uploader and cleared lists to disk
+                    Console.WriteLine("Uploader: " + _uploader);
                     return this._uploader;
                 }
                 else
