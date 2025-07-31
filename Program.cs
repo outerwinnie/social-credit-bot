@@ -423,14 +423,14 @@ class Bot
                 SaveData();
             }
             // --- VOTING PAYOUT LOGIC ---
-            int voteMultiplier = 1;
-            int.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
-            int majorityVoteMultiplier = voteMultiplier;
-            int.TryParse(Environment.GetEnvironmentVariable("MAJORITY_VOTE_MULTIPLIER"), out majorityVoteMultiplier);
+            decimal voteMultiplier = 1;
+            decimal.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
+            decimal majorityVoteMultiplier = voteMultiplier;
+            decimal.TryParse(Environment.GetEnvironmentVariable("MAJORITY_VOTE_MULTIPLIER"), out majorityVoteMultiplier);
             LoadVotes();
             var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
             var correctVotes = thisMonthVotes.Where(v => v.VotedForId == firstPlaceUserId).ToList();
-            int usedMultiplier = voteMultiplier;
+            decimal usedMultiplier = voteMultiplier;
             bool isMajority = (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2);
             if (isMajority)
                 usedMultiplier = majorityVoteMultiplier;
@@ -438,15 +438,17 @@ class Bot
             {
                 foreach (var vote in correctVotes)
                 {
+                    int extra = (int)Math.Round(vote.BetAmount * (usedMultiplier - 1), 0, MidpointRounding.AwayFromZero);
+                    int total = (int)Math.Round(vote.BetAmount * usedMultiplier, 0, MidpointRounding.AwayFromZero);
                     if (_userReactionCounts.ContainsKey(vote.VoterId))
-                        _userReactionCounts[vote.VoterId] += vote.BetAmount * (usedMultiplier - 1); // they already paid the bet, so just add the extra
+                        _userReactionCounts[vote.VoterId] += extra; // they already paid the bet, so just add the extra
                     else
-                        _userReactionCounts[vote.VoterId] = vote.BetAmount * usedMultiplier;
+                        _userReactionCounts[vote.VoterId] = total;
                 }
                 SaveData();
                 var winnerMentions = string.Join(", ", correctVotes.Select(v => $"<@{v.VoterId}>").Distinct());
                 string multiplierType = isMajority ? "mayoría" : "normal";
-                await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {usedMultiplier} ({multiplierType})! Ganadores: {winnerMentions}");
+                await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {usedMultiplier:0.##} ({multiplierType})! Ganadores: {winnerMentions}");
                 _votes.Clear();
                 SaveVotes();
             }
