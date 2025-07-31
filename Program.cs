@@ -402,6 +402,29 @@ class Bot
                 .Build();
             await targetChannel.SendMessageAsync(embed: embed);
         }
+        // Grant first-place reward before clearing leaderboard
+        if (sorted.Count > 0)
+        {
+            var firstPlace = sorted[0];
+            ulong firstPlaceUserId = firstPlace.Key;
+            int firstPlacePoints = firstPlace.Value;
+            int rewardCredits = 0;
+            int.TryParse(Environment.GetEnvironmentVariable("FIRST_PLACE_REWARD"), out rewardCredits);
+            if (rewardCredits > 0)
+            {
+                if (_userReactionCounts.ContainsKey(firstPlaceUserId))
+                {
+                    _userReactionCounts[firstPlaceUserId] += rewardCredits;
+                }
+                else
+                {
+                    _userReactionCounts[firstPlaceUserId] = rewardCredits;
+                }
+                SaveData();
+            }
+            string firstPlaceUsername = await GetUsernameOrMention(firstPlaceUserId);
+            await targetChannel.SendMessageAsync($":gift: ¡{firstPlaceUsername} ha ganado el premio por terminar en el primer puesto de la clasificacion! (+{rewardCredits} créditos)");
+        }
         if (resetAfterSend)
         {
             _revelarLeaderboard.Clear();
