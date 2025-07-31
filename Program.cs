@@ -428,7 +428,7 @@ class Bot
             LoadVotes();
             var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
             var correctVotes = thisMonthVotes.Where(v => v.VotedForId == firstPlaceUserId).ToList();
-            if (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2)
+            if (correctVotes.Count > 0)
             {
                 foreach (var vote in correctVotes)
                 {
@@ -438,7 +438,8 @@ class Bot
                         _userReactionCounts[vote.VoterId] = vote.BetAmount * voteMultiplier;
                 }
                 SaveData();
-                await targetChannel.SendMessageAsync($":moneybag: ¡La mayoría acertó el primer puesto! Las apuestas correctas han sido multiplicadas por {voteMultiplier}.");
+                var winnerMentions = string.Join(", ", correctVotes.Select(v => $"<@{v.VoterId}>").Distinct());
+                await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {voteMultiplier}! Ganadores: {winnerMentions}");
             }
             string firstPlaceUsername = await GetUsernameOrMention(firstPlaceUserId);
             await targetChannel.SendMessageAsync($":gift: ¡{firstPlaceUsername} ha ganado el premio por terminar en el primer puesto de la clasificacion! (+{rewardCredits} créditos)");
@@ -1217,7 +1218,7 @@ private void ScheduleDailyTask()
                     });
                 }
                 SaveVotes();
-                await command.RespondAsync($"Tu voto por <@{votedForId}> con una apuesta de {betAmount} ha sido registrado.");
+                await command.RespondAsync($"<@{voterId}> ha votado por <@{votedForId}> con una apuesta de {betAmount}.");
             }
             else if (command.Data.Name == "regalar")
 {
