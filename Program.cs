@@ -938,14 +938,16 @@ else
                             await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
                         }
                         if (!IsQuizFreezePeriod())
-{
-    await SendPostRequestAsync("image");
-}
-else
-{
-    if (targetChannel != null)
-        await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
-}
+                        {
+                            await SendPostRequestAsync("image");
+                        }
+                        else
+                        {
+                            if (targetChannel != null)
+                            {
+                                await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
+                            }
+                        }
                         SaveQuizState(); // Save after new round/image
                     }
                 }
