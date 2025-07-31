@@ -871,6 +871,11 @@ private void ScheduleDailyTask()
 
             else if (command.Data.Name == "revelar")
             {
+                if (IsQuizFreezePeriod())
+                {
+                    await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+                    return;
+                }
 
                 if (_uploader == string.Empty)
                 {
