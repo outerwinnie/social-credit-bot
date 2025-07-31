@@ -569,12 +569,17 @@ class Bot
 
         var voteCommand = new SlashCommandBuilder()
             .WithName("votar")
-            .WithDescription($"Vota por el usuario que crees que tendra el primer puesto en la clasificacion")
+            .WithDescription($"Vota por el usuario que crees que tendra el primer puesto en la clasificacion, y apuesta un numero de creditos")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a votar")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.User));
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a apostar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
         
         var voteGuildCommand = voteCommand.Build();
         await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
