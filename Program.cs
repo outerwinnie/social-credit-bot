@@ -357,6 +357,21 @@ class Bot
         });
     }
 
+    // Helper to get previous month name in Spanish
+    private string GetPreviousMonthNameSpanish()
+    {
+        var now = DateTime.Now;
+        int prevMonth = now.Month - 1;
+        int year = now.Year;
+        if (prevMonth == 0)
+        {
+            prevMonth = 12;
+            year -= 1;
+        }
+        var prevMonthDate = new DateTime(year, prevMonth, 1);
+        return prevMonthDate.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"));
+    }
+
     // Sends the leaderboard as an embed with ASCII table formatting
     // If resetAfterSend is true, reset and save the leaderboard after sending
     private async Task SendLeaderboardAnnouncementAsync(bool resetAfterSend = false)
@@ -396,7 +411,7 @@ class Bot
             }
             sb.AppendLine("```");
             var embed = new EmbedBuilder()
-                .WithTitle($":trophy: Clasificacion de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
+                .WithTitle($":trophy: Clasificacion de {GetPreviousMonthNameSpanish()}")
                 .WithDescription(sb.ToString())
                 .WithColor(Color.Gold)
                 .Build();
