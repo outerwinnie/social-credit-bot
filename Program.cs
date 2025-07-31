@@ -1217,7 +1217,7 @@ private void ScheduleDailyTask()
                     });
                 }
                 SaveVotes();
-                await command.RespondAsync($"Tu voto por <@{votedForId}> con una apuesta de {betAmount} ha sido registrado.", ephemeral: true);
+                await command.RespondAsync($"Tu voto por <@{votedForId}> con una apuesta de {betAmount} ha sido registrado.");
             }
             else if (command.Data.Name == "regalar")
 {
