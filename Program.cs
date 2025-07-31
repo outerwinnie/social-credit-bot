@@ -574,7 +574,7 @@ class Bot
                 .WithName("usuario")
                 .WithDescription("Usuario a votar")
                 .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User));
+                .WithType(ApplicationCommandOptionType.User))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
                 .WithDescription("Cantidad de créditos a apostar")
