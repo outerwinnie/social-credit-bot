@@ -425,21 +425,30 @@ class Bot
             // --- VOTING PAYOUT LOGIC ---
             int voteMultiplier = 1;
             int.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
+            int majorityVoteMultiplier = voteMultiplier;
+            int.TryParse(Environment.GetEnvironmentVariable("MAJORITY_VOTE_MULTIPLIER"), out majorityVoteMultiplier);
             LoadVotes();
             var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
             var correctVotes = thisMonthVotes.Where(v => v.VotedForId == firstPlaceUserId).ToList();
+            int usedMultiplier = voteMultiplier;
+            bool isMajority = (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2);
+            if (isMajority)
+                usedMultiplier = majorityVoteMultiplier;
             if (correctVotes.Count > 0)
             {
                 foreach (var vote in correctVotes)
                 {
                     if (_userReactionCounts.ContainsKey(vote.VoterId))
-                        _userReactionCounts[vote.VoterId] += vote.BetAmount * (voteMultiplier - 1); // they already paid the bet, so just add the extra
+                        _userReactionCounts[vote.VoterId] += vote.BetAmount * (usedMultiplier - 1); // they already paid the bet, so just add the extra
                     else
-                        _userReactionCounts[vote.VoterId] = vote.BetAmount * voteMultiplier;
+                        _userReactionCounts[vote.VoterId] = vote.BetAmount * usedMultiplier;
                 }
                 SaveData();
                 var winnerMentions = string.Join(", ", correctVotes.Select(v => $"<@{v.VoterId}>").Distinct());
-                await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {voteMultiplier}! Ganadores: {winnerMentions}");
+                string multiplierType = isMajority ? "mayoría" : "normal";
+                await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {usedMultiplier} ({multiplierType})! Ganadores: {winnerMentions}");
+                _votes.Clear();
+                SaveVotes();
             }
             string firstPlaceUsername = await GetUsernameOrMention(firstPlaceUserId);
             await targetChannel.SendMessageAsync($":gift: ¡{firstPlaceUsername} ha ganado el premio por terminar en el primer puesto de la clasificacion! (+{rewardCredits} créditos)");
