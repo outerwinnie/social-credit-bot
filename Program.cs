@@ -422,6 +422,24 @@ class Bot
                 }
                 SaveData();
             }
+            // --- VOTING PAYOUT LOGIC ---
+            int voteMultiplier = 1;
+            int.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
+            LoadVotes();
+            var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
+            var correctVotes = thisMonthVotes.Where(v => v.VotedForId == firstPlaceUserId).ToList();
+            if (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2)
+            {
+                foreach (var vote in correctVotes)
+                {
+                    if (_userReactionCounts.ContainsKey(vote.VoterId))
+                        _userReactionCounts[vote.VoterId] += vote.BetAmount * (voteMultiplier - 1); // they already paid the bet, so just add the extra
+                    else
+                        _userReactionCounts[vote.VoterId] = vote.BetAmount * voteMultiplier;
+                }
+                SaveData();
+                await targetChannel.SendMessageAsync($":moneybag: ¡La mayoría acertó el primer puesto! Las apuestas correctas han sido multiplicadas por {voteMultiplier}.");
+            }
             string firstPlaceUsername = await GetUsernameOrMention(firstPlaceUserId);
             await targetChannel.SendMessageAsync($":gift: ¡{firstPlaceUsername} ha ganado el premio por terminar en el primer puesto de la clasificacion! (+{rewardCredits} créditos)");
         }

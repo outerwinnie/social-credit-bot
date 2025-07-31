@@ -46,6 +46,7 @@ ENV DAILY_QUIZ_REWARD_3="5"
 ENV API_CHAT_URL=""
 ENV QUIZ_STATE_PATH="/app/quiz_state.json"
 ENV FIRST_PLACE_REWARD=""
+ENV VOTE_MULTIPLIER="2"
 ENV VOTES_FILE_PATH="/app/votes.csv"
 
 # Set the entry point to your application
