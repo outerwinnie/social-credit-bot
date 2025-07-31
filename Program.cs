@@ -638,19 +638,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
         Console.WriteLine($"Slash command 'votar' registered for the guild.");
 
-        var forceVoteCommand = new SlashCommandBuilder()
-            .WithName("forzar_votacion")
-            .WithDescription("[ADMIN] Forzar el resultado de la votación para testing.")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("Usuario a forzar como ganador")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User));
-        
-        var forceVoteGuildCommand = forceVoteCommand.Build();
-        await _client.Rest.CreateGuildCommand(forceVoteGuildCommand, _guildId);
-        Console.WriteLine($"Slash command 'forzar_votacion' registered for the guild.");
-
         var giftCommand = new SlashCommandBuilder()
             .WithName("regalar")
             .WithDescription($"Regala créditos a un usuario")
@@ -970,63 +957,7 @@ private void ScheduleDailyTask()
                 }
             }
         
-            else if (command.Data.Name == "forzar_votacion")
-{
-    ulong authorizedUserId = _adminId;
-    if (command.User.Id != authorizedUserId)
-    {
-        await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-        return;
-    }
-    var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-    if (userOption == null)
-    {
-        await command.RespondAsync("Debes especificar el usuario a forzar como ganador.", ephemeral: true);
-        return;
-    }
-    var forcedUser = userOption.Value as SocketUser;
-    if (forcedUser == null)
-    {
-        await command.RespondAsync("Usuario inválido para forzar como ganador.", ephemeral: true);
-        return;
-    }
-    ulong forcedUserId = forcedUser.Id;
-    // --- VOTING PAYOUT LOGIC (copied from leaderboard) ---
-    decimal voteMultiplier = 1;
-    decimal.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
-    decimal majorityVoteMultiplier = voteMultiplier;
-    decimal.TryParse(Environment.GetEnvironmentVariable("MAJORITY_VOTE_MULTIPLIER"), out majorityVoteMultiplier);
-    LoadVotes();
-    var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
-    var correctVotes = thisMonthVotes.Where(v => v.VotedForId == forcedUserId).ToList();
-    decimal usedMultiplier = voteMultiplier;
-    bool isMajority = (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2);
-    if (isMajority)
-        usedMultiplier = majorityVoteMultiplier;
-    if (correctVotes.Count > 0)
-    {
-        foreach (var vote in correctVotes)
-        {
-            int extra = (int)Math.Round(vote.BetAmount * (usedMultiplier - 1), 0, MidpointRounding.AwayFromZero);
-            int total = (int)Math.Round(vote.BetAmount * usedMultiplier, 0, MidpointRounding.AwayFromZero);
-            if (_userReactionCounts.ContainsKey(vote.VoterId))
-                _userReactionCounts[vote.VoterId] += extra; // they already paid the bet, so just add the extra
-            else
-                _userReactionCounts[vote.VoterId] = total;
-        }
-        SaveData();
-        var winnerMentions = string.Join(", ", correctVotes.Select(v => $"<@{v.VoterId}>").Distinct());
-        string multiplierType = isMajority ? "mayoría" : "normal";
-        await command.Channel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {usedMultiplier:0.##} ({multiplierType})! Ganadores: {winnerMentions}");
-        _votes.Clear();
-        SaveVotes();
-        await command.RespondAsync($"Votación forzada para <@{forcedUserId}> completada.", ephemeral: true);
-    }
-    else
-    {
-        await command.RespondAsync($"Nadie votó por <@{forcedUserId}> este mes.", ephemeral: true);
-    }
-}
+
 else if (command.Data.Name == "descontar")
             {
                 var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
