@@ -511,6 +511,19 @@ class Bot
         await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
         Console.WriteLine($"Slash command 'revelar' registered for the guild.");
 
+        var voteCommand = new SlashCommandBuilder()
+            .WithName("votar")
+            .WithDescription($"Vota por el usuario que crees que tendra el primer puesto en la clasificacion")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario a votar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User));
+        
+        var voteGuildCommand = voteCommand.Build();
+        await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
+        Console.WriteLine($"Slash command 'votar' registered for the guild.");
+
         var giftCommand = new SlashCommandBuilder()
             .WithName("regalar")
             .WithDescription($"Regala créditos a un usuario")
@@ -564,7 +577,14 @@ class Bot
         });
     }
     
-    private void ScheduleDailyTask()
+    private bool IsQuizFreezePeriod()
+{
+    var today = DateTime.Now;
+    int lastDay = DateTime.DaysInMonth(today.Year, today.Month);
+    return today.Day == lastDay;
+}
+
+private void ScheduleDailyTask()
     {
         Task.Run(async () =>
         {
@@ -596,7 +616,14 @@ class Bot
                 
                 // Execute the daily task
                 Console.WriteLine($"Executing daily task: SendPostRequestAsync with reward '{_dailyTaskReward}'");
-                await SendPostRequestAsync(_dailyTaskReward);
+                if (!IsQuizFreezePeriod())
+{
+    await SendPostRequestAsync(_dailyTaskReward);
+}
+else
+{
+    Console.WriteLine("Quiz image posting is frozen until the first of the month.");
+}
             }
         });
     }
@@ -910,7 +937,15 @@ class Bot
                         {
                             await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
                         }
-                        await SendPostRequestAsync("image");
+                        if (!IsQuizFreezePeriod())
+{
+    await SendPostRequestAsync("image");
+}
+else
+{
+    if (targetChannel != null)
+        await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
+}
                         SaveQuizState(); // Save after new round/image
                     }
                 }
