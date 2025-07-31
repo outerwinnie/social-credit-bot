@@ -566,13 +566,42 @@ class Bot
             while (true)
             {
                 DateTime now = DateTime.Now;
-                DateTime nextRun = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59);
+                int lastDay = DateTime.DaysInMonth(now.Year, now.Month);
+                int penultimateDay = lastDay - 1;
+                DateTime nextRun = new DateTime(now.Year, now.Month, penultimateDay, 23, 59, 59);
 
                 TimeSpan waitTime = nextRun - now;
                 Console.WriteLine($"{waitTime}%");
                 await Task.Delay(waitTime);
-                
-                RedistributeWealth(percentage);
+
+                // Send votation day message to target channel
+                try
+                {
+                    var channelIdStr = Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "";
+                    if (!ulong.TryParse(channelIdStr, out var channelId))
+                    {
+                        Console.WriteLine("TARGET_CHANNEL_ID not set or invalid. Skipping votation day announcement.");
+                    }
+                    else
+                    {
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        if (targetChannel == null)
+                        {
+                            Console.WriteLine($"Could not find target channel with ID: {channelId}");
+                        }
+                        else
+                        {
+                            await targetChannel.SendMessageAsync(":ballot_box: ¡Mañana es día de votación! ¡Participa y vota por quién crees que ganará este mes!");
+                            Console.WriteLine("Votation day announcement sent.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending votation day announcement: {ex.Message}");
+                }
+
+                // RedistributeWealth(percentage); // Redistribution disabled
             }
         });
     }
