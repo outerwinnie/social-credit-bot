@@ -69,6 +69,8 @@ class Bot
             var dir = Path.GetDirectoryName(_quizStatePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
+            Console.WriteLine($"[DEBUG] Attempting to write quiz state to: {_quizStatePath}");
+            Console.WriteLine($"[DEBUG] Current Directory: {Directory.GetCurrentDirectory()}");
             File.WriteAllText(_quizStatePath, json, Encoding.UTF8); // This will create or overwrite the file
             if (!File.Exists(_quizStatePath))
                 Console.WriteLine($"Quiz state file was not created: {_quizStatePath}");
@@ -110,6 +112,9 @@ class Bot
     private static string? _revelarLeaderboardPath;
     private static Dictionary<ulong, int> _revelarLeaderboard = new Dictionary<ulong, int>();
 
+    private readonly string _votesFilePath;
+    private List<VoteRecord> _votes = new List<VoteRecord>();
+
     public Bot()
     {
         var config = new DiscordSocketConfig
@@ -123,6 +128,8 @@ class Bot
         _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
         _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
         _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
+        _votesFilePath = Environment.GetEnvironmentVariable("VOTES_FILE_PATH") ?? "votes.csv";
+        LoadVotes();
         _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
         LoadRevelarLeaderboard();
         _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "18:00";
@@ -178,6 +185,57 @@ class Bot
     // Ensure quiz state file exists on startup
     SaveQuizState();
     }
+
+    private void LoadVotes()
+    {
+        try
+        {
+            if (!File.Exists(_votesFilePath))
+            {
+                using (var writer = new StreamWriter(_votesFilePath))
+                using (var csvWriter = new CsvWriter(writer, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)))
+                {
+                    csvWriter.WriteHeader<VoteRecord>();
+                    csvWriter.NextRecord();
+                }
+                _votes = new List<VoteRecord>();
+                return;
+            }
+            using (var reader = new StreamReader(_votesFilePath))
+            using (var csv = new CsvReader(reader, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)))
+            {
+                _votes = csv.GetRecords<VoteRecord>().ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading votes: {ex.Message}");
+            _votes = new List<VoteRecord>();
+        }
+    }
+
+    private void SaveVotes()
+    {
+        try
+        {
+            using (var writer = new StreamWriter(_votesFilePath))
+            using (var csv = new CsvWriter(writer, new CsvHelper.Configuration.CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture)))
+            {
+                csv.WriteHeader<VoteRecord>();
+                csv.NextRecord();
+                foreach (var vote in _votes)
+                {
+                    csv.WriteRecord(vote);
+                    csv.NextRecord();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving votes: {ex.Message}");
+        }
+    }
+
 
     // Loads the /revelar leaderboard from a JSON file. Handles missing or corrupted files gracefully.
     private static void LoadRevelarLeaderboard()
@@ -301,6 +359,21 @@ class Bot
         });
     }
 
+    // Helper to get previous month name in Spanish
+    private string GetPreviousMonthNameSpanish()
+    {
+        var now = DateTime.Now;
+        int prevMonth = now.Month - 1;
+        int year = now.Year;
+        if (prevMonth == 0)
+        {
+            prevMonth = 12;
+            year -= 1;
+        }
+        var prevMonthDate = new DateTime(year, prevMonth, 1);
+        return prevMonthDate.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"));
+    }
+
     // Sends the leaderboard as an embed with ASCII table formatting
     // If resetAfterSend is true, reset and save the leaderboard after sending
     private async Task SendLeaderboardAnnouncementAsync(bool resetAfterSend = false)
@@ -340,11 +413,64 @@ class Bot
             }
             sb.AppendLine("```");
             var embed = new EmbedBuilder()
-                .WithTitle($":trophy: Clasificacion de {DateTime.Now.ToString("MMMM", new System.Globalization.CultureInfo("es-ES"))}")
+                .WithTitle($":trophy: Clasificacion de {GetPreviousMonthNameSpanish()}")
                 .WithDescription(sb.ToString())
                 .WithColor(Color.Gold)
                 .Build();
             await targetChannel.SendMessageAsync(embed: embed);
+        }
+        // Grant first-place reward before clearing leaderboard
+        if (sorted.Count > 0)
+        {
+            var firstPlace = sorted[0];
+            ulong firstPlaceUserId = firstPlace.Key;
+            int firstPlacePoints = firstPlace.Value;
+            int rewardCredits = 0;
+            int.TryParse(Environment.GetEnvironmentVariable("FIRST_PLACE_REWARD"), out rewardCredits);
+            if (rewardCredits > 0)
+            {
+                if (_userReactionCounts.ContainsKey(firstPlaceUserId))
+                {
+                    _userReactionCounts[firstPlaceUserId] += rewardCredits;
+                }
+                else
+                {
+                    _userReactionCounts[firstPlaceUserId] = rewardCredits;
+                }
+                SaveData();
+            }
+            // --- VOTING PAYOUT LOGIC ---
+            decimal voteMultiplier = 1;
+            decimal.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
+            decimal majorityVoteMultiplier = voteMultiplier;
+            decimal.TryParse(Environment.GetEnvironmentVariable("MAJORITY_VOTE_MULTIPLIER"), out majorityVoteMultiplier);
+            LoadVotes();
+            var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
+            var correctVotes = thisMonthVotes.Where(v => v.VotedForId == firstPlaceUserId).ToList();
+            decimal usedMultiplier = voteMultiplier;
+            bool isMajority = (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2);
+            if (isMajority)
+                usedMultiplier = majorityVoteMultiplier;
+            if (correctVotes.Count > 0)
+            {
+                foreach (var vote in correctVotes)
+                {
+                    int extra = (int)Math.Round(vote.BetAmount * (usedMultiplier - 1), 0, MidpointRounding.AwayFromZero);
+                    int total = (int)Math.Round(vote.BetAmount * usedMultiplier, 0, MidpointRounding.AwayFromZero);
+                    if (_userReactionCounts.ContainsKey(vote.VoterId))
+                        _userReactionCounts[vote.VoterId] += extra; // they already paid the bet, so just add the extra
+                    else
+                        _userReactionCounts[vote.VoterId] = total;
+                }
+                SaveData();
+                var winnerMentions = string.Join(", ", correctVotes.Select(v => $"<@{v.VoterId}>").Distinct());
+                string multiplierType = isMajority ? "mayoría" : "normal";
+                await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {usedMultiplier:0.##} ({multiplierType})! Ganadores: {winnerMentions}");
+                _votes.Clear();
+                SaveVotes();
+            }
+            string firstPlaceUsername = await GetUsernameOrMention(firstPlaceUserId);
+            await targetChannel.SendMessageAsync($":gift: ¡{firstPlaceUsername} ha ganado el premio por terminar en el primer puesto de la clasificacion! (+{rewardCredits} créditos)");
         }
         if (resetAfterSend)
         {
@@ -511,6 +637,24 @@ class Bot
         await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
         Console.WriteLine($"Slash command 'revelar' registered for the guild.");
 
+        var voteCommand = new SlashCommandBuilder()
+            .WithName("votar")
+            .WithDescription("Vota por el usuario que crees que ganará y apuesta créditos")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario a votar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a apostar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var voteGuildCommand = voteCommand.Build();
+        await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
+        Console.WriteLine($"Slash command 'votar' registered for the guild.");
+
         var giftCommand = new SlashCommandBuilder()
             .WithName("regalar")
             .WithDescription($"Regala créditos a un usuario")
@@ -553,18 +697,54 @@ class Bot
             while (true)
             {
                 DateTime now = DateTime.Now;
-                DateTime nextRun = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59);
+                int lastDay = DateTime.DaysInMonth(now.Year, now.Month);
+                int penultimateDay = lastDay - 1;
+                DateTime nextRun = new DateTime(now.Year, now.Month, penultimateDay, 23, 59, 59);
 
                 TimeSpan waitTime = nextRun - now;
                 Console.WriteLine($"{waitTime}%");
                 await Task.Delay(waitTime);
-                
-                RedistributeWealth(percentage);
+
+                // Send votation day message to target channel
+                try
+                {
+                    var channelIdStr = Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "";
+                    if (!ulong.TryParse(channelIdStr, out var channelId))
+                    {
+                        Console.WriteLine("TARGET_CHANNEL_ID not set or invalid. Skipping votation day announcement.");
+                    }
+                    else
+                    {
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        if (targetChannel == null)
+                        {
+                            Console.WriteLine($"Could not find target channel with ID: {channelId}");
+                        }
+                        else
+                        {
+                            await targetChannel.SendMessageAsync(":ballot_box: ¡Hoy es dia de votacion! ¡Participa y vota por quien crees que ganara este mes!");
+                            Console.WriteLine("Votation day announcement sent.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error sending votation day announcement: {ex.Message}");
+                }
+
+                // RedistributeWealth(percentage); // Redistribution disabled
             }
         });
     }
     
-    private void ScheduleDailyTask()
+    private bool IsQuizFreezePeriod()
+    {
+        var today = DateTime.Now;
+        int lastDay = DateTime.DaysInMonth(today.Year, today.Month);
+        return today.Day == lastDay;
+    }
+
+private void ScheduleDailyTask()
     {
         Task.Run(async () =>
         {
@@ -596,8 +776,15 @@ class Bot
                 
                 // Execute the daily task
                 Console.WriteLine($"Executing daily task: SendPostRequestAsync with reward '{_dailyTaskReward}'");
-                await SendPostRequestAsync(_dailyTaskReward);
-            }
+                if (!IsQuizFreezePeriod())
+                {
+                    await SendPostRequestAsync(_dailyTaskReward);
+                }
+                else
+                {
+                    Console.WriteLine("Quiz image posting is frozen until the first of the month.");
+                }
+            }   
         });
     }
     
@@ -628,13 +815,8 @@ class Bot
                     this._uploader = uploaderProp.GetString();
                     this._revelarTriedUsers.Clear();
                     this._revelarCorrectUsers.Clear();
-                    // SaveQuizState is an instance method, so we need a reference to the current Bot instance.
-                // If this is called from an instance method, use this.SaveQuizState();
-                // If called from a static method, you must pass the Bot instance as a parameter.
-                // For now, comment this out and add a TODO for proper refactor.
-                // SaveQuizState();
-                Console.WriteLine("Uploader: " + _uploader);
-                // TODO: Call SaveQuizState() from the Bot instance after SendPostRequestAsync completes.
+                    SaveQuizState(); // Now persist the uploader and cleared lists to disk
+                    Console.WriteLine("Uploader: " + _uploader);
                     return this._uploader;
                 }
                 else
@@ -787,7 +969,8 @@ class Bot
                 }
             }
         
-            else if (command.Data.Name == "descontar")
+
+else if (command.Data.Name == "descontar")
             {
                 var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
                 var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
@@ -844,6 +1027,11 @@ class Bot
 
             else if (command.Data.Name == "revelar")
             {
+                if (IsQuizFreezePeriod())
+                {
+                    await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+                    return;
+                }
 
                 if (_uploader == string.Empty)
                 {
@@ -858,6 +1046,9 @@ class Bot
                     return;
                 }
                 _revelarTriedUsers.Add(userId);
+                Console.WriteLine($"[DEBUG] User {userId} added to _revelarTriedUsers. Saving quiz state...");
+                SaveQuizState();
+                Console.WriteLine($"[DEBUG] Quiz state saved after user {userId} failed quiz.");
                 var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
 
                 if (_uploader == choosenUser)
@@ -910,7 +1101,17 @@ class Bot
                         {
                             await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
                         }
-                        await SendPostRequestAsync("image");
+                        if (!IsQuizFreezePeriod())
+                        {
+                            await SendPostRequestAsync("image");
+                        }
+                        else
+                        {
+                            if (targetChannel != null)
+                            {
+                                await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
+                            }
+                        }
                         SaveQuizState(); // Save after new round/image
                     }
                 }
@@ -922,6 +1123,12 @@ class Bot
             
             else if (command.Data.Name == "recuerdate")
             {
+                if (IsQuizFreezePeriod())
+                {
+                    await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+                    return;
+                }
+
                 var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
                 
                 // Default multiplier is 1 if "cantidad" is not provided or invalid
@@ -980,6 +1187,66 @@ class Bot
                 }
             }
             
+            else if (command.Data.Name == "votar")
+            {
+                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+                var betOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad" || o.Name == "bet" || o.Name == "apuesta");
+
+                if (userOption == null)
+                {
+                    await command.RespondAsync("Debes especificar el usuario a votar.", ephemeral: true);
+                    return;
+                }
+
+                var votedForUser = userOption.Value as SocketUser;
+                if (votedForUser == null)
+                {
+                    await command.RespondAsync("Usuario inválido para votar.", ephemeral: true);
+                    return;
+                }
+
+                ulong voterId = command.User.Id;
+                ulong votedForId = votedForUser.Id;
+
+                if (voterId == votedForId)
+                {
+                    await command.RespondAsync("No puedes votar por ti mismo.", ephemeral: true);
+                    return;
+                }
+
+                int betAmount = 1; // Default bet if not present
+                if (betOption != null && int.TryParse(betOption.Value?.ToString(), out int parsedBet))
+                {
+                    betAmount = parsedBet;
+                }
+                if (betAmount <= 0)
+                {
+                    await command.RespondAsync("La cantidad apostada debe ser un número positivo.", ephemeral: true);
+                    return;
+                }
+
+                // Load votes from CSV to ensure up-to-date
+                LoadVotes();
+                var existingVote = _votes.FirstOrDefault(v => v.VoterId == voterId && v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year);
+                if (existingVote != null)
+                {
+                    existingVote.VotedForId = votedForId;
+                    existingVote.BetAmount = betAmount;
+                    existingVote.Timestamp = DateTime.Now;
+                }
+                else
+                {
+                    _votes.Add(new VoteRecord
+                    {
+                        VoterId = voterId,
+                        VotedForId = votedForId,
+                        BetAmount = betAmount,
+                        Timestamp = DateTime.Now
+                    });
+                }
+                SaveVotes();
+                await command.RespondAsync($"<@{voterId}> ha votado por <@{votedForId}> con una apuesta de {betAmount}.");
+            }
             else if (command.Data.Name == "regalar")
 {
     var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
