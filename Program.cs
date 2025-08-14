@@ -1290,7 +1290,7 @@ private void ScheduleDailyTask()
                     else
                     {
                         
-                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
+                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} créditos.", ephemeral: true);
                     }
                 }
                 else
@@ -1579,7 +1579,7 @@ else if (command.Data.Name == "descontar")
                 }
                 else
                 {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
                 }
             }
             
@@ -1669,14 +1669,14 @@ else if (command.Data.Name == "descontar")
     }
     if (senderId == recipientId)
     {
-        await command.RespondAsync("No puedes regalarte creditos a ti mismo.", ephemeral: true);
+        await command.RespondAsync("No puedes regalarte créditos a ti mismo.", ephemeral: true);
         return;
     }
 
     LoadData();
     if (!_userReactionCounts.ContainsKey(senderId) || _userReactionCounts[senderId] < amount)
     {
-        await command.RespondAsync($"No tienes suficientes creditos para regalar {amount}.", ephemeral: true);
+        await command.RespondAsync($"No tienes suficientes créditos para regalar {amount}.", ephemeral: true);
         return;
     }
 
@@ -1689,17 +1689,17 @@ else if (command.Data.Name == "descontar")
     SaveData();
 
     // Confirmation to sender
-    await command.RespondAsync($"Has regalado {amount} creditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
+    await command.RespondAsync($"Has regalado {amount} créditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
 
     // Notify recipient in channel
     var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
     var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
     if (targetChannel != null)
     {
-        await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} creditos a <@{recipientId}>!");
+        await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
     }
 
-    Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} creditos");
+    Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} créditos");
 }
 else if (command.Data.Name == "meme")
             {
@@ -1757,7 +1757,7 @@ else if (command.Data.Name == "meme")
                 }
                 else
                 {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
                 }
             }
             else if (command.Data.Name == "retar")
@@ -2765,7 +2765,7 @@ else if (command.Data.Name == "meme")
         if (targetChannel != null)
         {
             // Sending a message to the specific channel and tagging the user
-            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} creditos. https://c.tenor.com/4wo9yEcmBcsAAAAd/tenor.gif");
+            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} créditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} créditos. https://c.tenor.com/4wo9yEcmBcsAAAAd/tenor.gif");
         }
         else
         {
