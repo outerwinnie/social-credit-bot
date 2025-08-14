@@ -863,7 +863,7 @@ class Bot
 
         var dailyQuizCommand = new SlashCommandBuilder()
             .WithName("revelar")
-            .WithDescription($"Revela a el usuario que compartio la imagen")
+            .WithDescription($"Revela a el usuario que compartio la imagen originalmente")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a revelar")
@@ -876,7 +876,7 @@ class Bot
 
         var voteCommand = new SlashCommandBuilder()
             .WithName("votar")
-            .WithDescription("Vota por el usuario que crees que ganará y apuesta créditos")
+            .WithDescription("Vota por el usuario que crees que quedara primero en la clasificacion y apuesta créditos")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a votar")
@@ -929,7 +929,7 @@ class Bot
         // Retar challenge command
         var retarCommand = new SlashCommandBuilder()
             .WithName("retar")
-            .WithDescription("Reta a otro usuario a una apuesta con imagen")
+            .WithDescription("Reta a otro usuario a una apuesta de 'Recuerdate'")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a retar")
@@ -1650,7 +1650,7 @@ else if (command.Data.Name == "descontar")
 
     if (userOption == null || amountOption == null)
     {
-        await command.RespondAsync("No es posible, comprueba los parametros.", ephemeral: true);
+        await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
         return;
     }
 
@@ -1935,14 +1935,13 @@ else if (command.Data.Name == "meme")
                                 "• Si ambos fallan, los créditos se pierden", false)
                             .AddField("📝 Cómo jugar", 
                                 "Usen `/adivino [respuesta]` para participar", false)
-                            .WithFooter($"ID del reto: {challenge.ChallengeId}")
                             .WithTimestamp(DateTimeOffset.Now)
                             .Build();
 
                         await targetChannel.SendMessageAsync(embed: embed);
                     }
 
-                    await command.FollowupAsync("¡Reto aceptado! Se ha enviado una imagen al canal. ¡Que comience la competencia!", ephemeral: true);
+                    await command.FollowupAsync("¡Reto aceptado! Se ha enviado una imagen al canal. ¡Que comience el reto!", ephemeral: true);
                     Console.WriteLine($"[RETAR] Challenge accepted: {challenge.ChallengeId}");
                 }
                 catch (Exception ex)
@@ -2055,7 +2054,6 @@ else if (command.Data.Name == "meme")
                                 .AddField("🏆 Ganador", $"<@{userId}>", true)
                                 .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
                                 .AddField("✅ Respuesta Correcta", $"@{guessedUsername}", false)
-                                .WithFooter($"ID del reto: {challenge.ChallengeId}")
                                 .WithTimestamp(DateTimeOffset.Now)
                                 .Build();
 
@@ -2093,7 +2091,6 @@ else if (command.Data.Name == "meme")
                                     .AddField("💔 Resultado", "Nadie gana", true)
                                     .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
                                     .AddField("✅ Respuesta Correcta", $"@{challenge.ImageUrl ?? "Desconocida"}", false)
-                                    .WithFooter($"ID del reto: {challenge.ChallengeId}")
                                     .WithTimestamp(DateTimeOffset.Now)
                                     .Build();
 
@@ -2174,7 +2171,6 @@ else if (command.Data.Name == "meme")
                     .WithDescription("¿Aprobar este puzzle?")
                     .WithColor(Color.Orange)
                     .AddField("👤 Creador", creatorName, true)
-                    .AddField("🆔 ID", nextPuzzle.PuzzleId, true)
                     .AddField("✅ Respuesta Correcta", nextPuzzle.CorrectAnswer, false);
 
                 if (!string.IsNullOrEmpty(nextPuzzle.Text))
@@ -2408,7 +2404,7 @@ else if (command.Data.Name == "meme")
                             .WithColor(Color.Blue)
                             .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
                             .AddField("👥 Límite", "3 ganadores", true)
-                            .AddField("🎯 Una oportunidad", "Solo puedes intentar una vez", true);
+                            .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true);
 
                         if (!string.IsNullOrEmpty(targetPuzzle.Text))
                         {
@@ -2551,7 +2547,6 @@ else if (command.Data.Name == "meme")
                     "• Si ambos fallan, los créditos se pierden", false)
                 .AddField("📝 Cómo jugar", 
                     $"Usen 'adivino {challengeId} [respuesta]' para participar", false)
-                .WithFooter($"ID del reto: {challengeId}")
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
