@@ -1023,6 +1023,15 @@ class Bot
         var resolverGuildCommand = resolverCommand.Build();
         await _client.Rest.CreateGuildCommand(resolverGuildCommand, _guildId);
         Console.WriteLine("Slash command 'resolver' registered for the guild.");
+
+        // Force puzzle expiration command (admin only)
+        var finalizarPuzzleCommand = new SlashCommandBuilder()
+            .WithName("finalizar-puzzle")
+            .WithDescription("Finaliza el puzzle activo inmediatamente (solo admin)");
+        
+        var finalizarPuzzleGuildCommand = finalizarPuzzleCommand.Build();
+        await _client.Rest.CreateGuildCommand(finalizarPuzzleGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'finalizar-puzzle' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -2283,6 +2292,51 @@ else if (command.Data.Name == "meme")
                 }
 
                 SavePuzzles();
+            }
+            else if (command.Data.Name == "finalizar-puzzle")
+            {
+                // Check if user is admin
+                if (command.User.Id != _adminId)
+                {
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+
+                if (_activePuzzle == null)
+                {
+                    await command.RespondAsync("No hay ningún puzzle activo para finalizar.", ephemeral: true);
+                    return;
+                }
+
+                var puzzleToFinalize = _activePuzzle;
+                Console.WriteLine($"[PUZZLE] Admin force-expired puzzle: {puzzleToFinalize.PuzzleId}");
+
+                // Announce forced expiration in channel
+                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                if (targetChannel != null)
+                {
+                    var embed = new EmbedBuilder()
+                        .WithTitle("🛑 Puzzle Finalizado por Admin")
+                        .WithDescription("El puzzle activo ha sido finalizado manualmente por un administrador.")
+                        .WithColor(Color.Red)
+                        .AddField("✅ Respuesta Correcta", puzzleToFinalize.CorrectAnswer, false)
+                        .AddField("🏆 Ganadores", puzzleToFinalize.CorrectSolvers.Count > 0 ? 
+                            string.Join(", ", puzzleToFinalize.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
+                        .AddField("📊 Estadísticas", 
+                            $"• Ganadores: {puzzleToFinalize.CorrectSolvers.Count}/3\n" +
+                            $"• Intentos totales: {puzzleToFinalize.AttemptedUsers.Count}", false)
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await targetChannel.SendMessageAsync(embed: embed);
+                }
+
+                _activePuzzle = null;
+                SavePuzzles();
+
+                await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
             }
         }
         
