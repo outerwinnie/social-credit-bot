@@ -1624,7 +1624,6 @@ else if (command.Data.Name == "meme")
                         .AddField("⏰ Expira en", "1 hora", true)
                         .AddField("📝 Instrucciones", 
                             $"<@{challengedId}> puede usar `/acepto` o `/rechazo` para responder", false)
-                        .WithFooter($"ID del reto: {challengeId}")
                         .WithTimestamp(DateTimeOffset.Now)
                         .Build();
 
