@@ -1644,7 +1644,7 @@ else if (command.Data.Name == "meme")
                                 "• El ganador se lleva todos los créditos\n" +
                                 "• Si ambos fallan, los créditos se pierden", false)
                             .AddField("📝 Cómo jugar", 
-                                $"Usen 'adivino {challenge.ChallengeId} [respuesta]' para participar", false)
+                                "Usen `/adivino [respuesta]` para participar", false)
                             .WithFooter($"ID del reto: {challenge.ChallengeId}")
                             .WithTimestamp(DateTimeOffset.Now)
                             .Build();
@@ -1697,6 +1697,127 @@ else if (command.Data.Name == "meme")
 
                 await command.RespondAsync("Has rechazado el reto.", ephemeral: true);
                 Console.WriteLine($"[RETAR] Challenge rejected: {challenge.ChallengeId}");
+            }
+            else if (command.Data.Name == "adivino")
+            {
+                var userId = command.User.Id;
+                var answer = command.Data.Options.First().Value.ToString();
+
+                // Find active challenge where this user is a participant
+                var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
+                    (c.ChallengerId == userId || c.ChallengedId == userId) && 
+                    c.IsAccepted && !c.IsCompleted);
+
+                if (challenge == null)
+                {
+                    await command.RespondAsync("No tienes ningún reto activo para adivinar.", ephemeral: true);
+                    return;
+                }
+
+                // Check if user has attempts left
+                if (userId == challenge.ChallengerId)
+                {
+                    if (challenge.ChallengerAttempts >= 2)
+                    {
+                        await command.RespondAsync("Ya has usado todos tus intentos.", ephemeral: true);
+                        return;
+                    }
+                    challenge.ChallengerAttempts++;
+                }
+                else
+                {
+                    if (challenge.ChallengedAttempts >= 2)
+                    {
+                        await command.RespondAsync("Ya has usado todos tus intentos.", ephemeral: true);
+                        return;
+                    }
+                    challenge.ChallengedAttempts++;
+                }
+
+                SaveRetarChallenges();
+
+                // Check answer with external API
+                try
+                {
+                    string checkResult = await SendPostRequestAsync($"check:{answer}");
+                    bool isCorrect = checkResult.Trim().ToLower() == "true";
+
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (isCorrect)
+                    {
+                        // User wins - transfer credits
+                        LoadData();
+                        _userReactionCounts[userId] += challenge.BetAmount * 2;
+                        SaveData();
+
+                        challenge.IsCompleted = true;
+                        challenge.WinnerId = userId;
+                        SaveRetarChallenges();
+
+                        if (targetChannel != null)
+                        {
+                            var embed = new EmbedBuilder()
+                                .WithTitle("🎉 ¡Reto Completado!")
+                                .WithDescription($"<@{userId}> ha adivinado correctamente!")
+                                .WithColor(Color.Green)
+                                .AddField("🏆 Ganador", $"<@{userId}>", true)
+                                .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
+                                .AddField("✅ Respuesta", answer, false)
+                                .WithFooter($"ID del reto: {challenge.ChallengeId}")
+                                .WithTimestamp(DateTimeOffset.Now)
+                                .Build();
+
+                            await targetChannel.SendMessageAsync(embed: embed);
+                        }
+
+                        await command.RespondAsync($"¡Correcto! Has ganado {challenge.BetAmount * 2} créditos.", ephemeral: true);
+                        Console.WriteLine($"[RETAR] Challenge won by {userId}: {challenge.ChallengeId}");
+                    }
+                    else
+                    {
+                        // Wrong answer
+                        int attemptsLeft = userId == challenge.ChallengerId ? 
+                            (2 - challenge.ChallengerAttempts) : (2 - challenge.ChallengedAttempts);
+
+                        if (targetChannel != null)
+                        {
+                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Respuesta: '{answer}'. Le quedan {attemptsLeft} intentos.");
+                        }
+
+                        await command.RespondAsync($"Incorrecto. Te quedan {attemptsLeft} intentos.", ephemeral: true);
+
+                        // Check if both players have used all attempts
+                        if (challenge.ChallengerAttempts >= 2 && challenge.ChallengedAttempts >= 2)
+                        {
+                            challenge.IsCompleted = true;
+                            SaveRetarChallenges();
+
+                            if (targetChannel != null)
+                            {
+                                var embed = new EmbedBuilder()
+                                    .WithTitle("💸 Reto Fallido")
+                                    .WithDescription("Ambos jugadores han fallado todas sus oportunidades.")
+                                    .WithColor(Color.Red)
+                                    .AddField("💔 Resultado", "Nadie gana", true)
+                                    .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
+                                    .WithFooter($"ID del reto: {challenge.ChallengeId}")
+                                    .WithTimestamp(DateTimeOffset.Now)
+                                    .Build();
+
+                                await targetChannel.SendMessageAsync(embed: embed);
+                            }
+
+                            Console.WriteLine($"[RETAR] Challenge failed by both players: {challenge.ChallengeId}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error checking answer: {ex.Message}");
+                    await command.RespondAsync("Error al verificar la respuesta. Inténtalo de nuevo.", ephemeral: true);
+                }
             }
         }
         
