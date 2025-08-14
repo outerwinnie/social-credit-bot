@@ -142,18 +142,23 @@ class Bot
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers
         };
         
-        _quizStatePath = Path.Combine(Environment.CurrentDirectory, "quiz_state.json");
-        _retarChallengesPath = Path.Combine(Environment.CurrentDirectory, "retar_challenges.json");
+        // Get base data directory from environment variable, default to current directory
+        var dataDirectory = Environment.GetEnvironmentVariable("DATA_DIRECTORY") ?? Environment.CurrentDirectory;
+        
+        // Combine base directory with each filename
+        _quizStatePath = Path.Combine(dataDirectory, "quiz_state.json");
+        _retarChallengesPath = Path.Combine(dataDirectory, "retar_challenges.json");
+        _csvFilePath = Path.Combine(dataDirectory, "user_reactions.csv");
+        _ignoredUsersFilePath = Path.Combine(dataDirectory, "ignored_users.csv");
+        _rewardsFilePath = Path.Combine(dataDirectory, "rewards.csv");
+        _votesFilePath = Path.Combine(dataDirectory, "votes.csv");
+        _revelarLeaderboardPath = Path.Combine(dataDirectory, "revelar_leaderboard.json");
+        
         LoadQuizState();
         LoadVotes();
         LoadRetarChallenges();
         _client = new DiscordSocketClient(config);
-        _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
-        _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
-        _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
-        _votesFilePath = Environment.GetEnvironmentVariable("VOTES_FILE_PATH") ?? "votes.csv";
         LoadVotes();
-        _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
         LoadRevelarLeaderboard();
         _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "18:00";
         _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
