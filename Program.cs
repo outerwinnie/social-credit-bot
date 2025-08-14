@@ -125,20 +125,31 @@ class Bot
     {
         try
         {
+            Console.WriteLine($"[DEBUG] Loading quiz state from: {_quizStatePath}");
             if (!File.Exists(_quizStatePath))
             {
+                Console.WriteLine("[DEBUG] Quiz state file does not exist, initializing empty state");
                 _uploader = string.Empty;
                 _revelarCorrectUsers.Clear();
                 _revelarTriedUsers.Clear();
                 return;
             }
             var json = File.ReadAllText(_quizStatePath, Encoding.UTF8);
+            Console.WriteLine($"[DEBUG] Quiz state JSON content: {json}");
             var state = System.Text.Json.JsonSerializer.Deserialize<QuizState>(json);
             if (state != null)
             {
                 _uploader = state.Uploader ?? string.Empty;
                 _revelarCorrectUsers = state.CorrectUsers ?? new List<ulong>();
                 _revelarTriedUsers = state.TriedUsers != null ? new HashSet<ulong>(state.TriedUsers) : new HashSet<ulong>();
+                Console.WriteLine($"[DEBUG] Loaded quiz state - Uploader: '{_uploader}', Correct users: {_revelarCorrectUsers.Count}, Tried users: {_revelarTriedUsers.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] Quiz state deserialization returned null");
+                _uploader = string.Empty;
+                _revelarCorrectUsers.Clear();
+                _revelarTriedUsers.Clear();
             }
         }
         catch (Exception ex)
@@ -1327,6 +1338,11 @@ else if (command.Data.Name == "descontar")
 
             else if (command.Data.Name == "revelar")
             {
+                Console.WriteLine($"[DEBUG] /revelar command called by user {command.User.Id}");
+                Console.WriteLine($"[DEBUG] Current _uploader value: '{_uploader}'");
+                Console.WriteLine($"[DEBUG] _uploader == string.Empty: {_uploader == string.Empty}");
+                Console.WriteLine($"[DEBUG] string.IsNullOrEmpty(_uploader): {string.IsNullOrEmpty(_uploader)}");
+                
                 if (IsQuizFreezePeriod())
                 {
                     await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
@@ -1335,6 +1351,7 @@ else if (command.Data.Name == "descontar")
 
                 if (_uploader == string.Empty)
                 {
+                    Console.WriteLine("[DEBUG] _uploader is empty, sending error message");
                     await command.RespondAsync("La imagen aun no ha sido enviada, espera a que se envie y vuelve a intentarlo.", ephemeral: true);
                     return;
                 }
