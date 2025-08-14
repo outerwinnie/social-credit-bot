@@ -25,10 +25,7 @@ COPY --from=build /app/publish .
 
 # Set environment variables with default values
 ENV DISCORD_BOT_TOKEN=""
-ENV CSV_FILE_PATH="/app/user_reactions.csv"
 ENV REACTION_INCREMENT="1"
-ENV IGNORED_USERS_FILE_PATH="/app/ignored_users.csv"
-ENV REVELAR_LEADERBOARD_PATH="/app/revelar_leaderboard.json"
 ENV RECUERDATE_PRICE="15"
 ENV MEME_PRICE="25"
 ENV TARGET_CHANNEL_ID=""
@@ -44,11 +41,10 @@ ENV DAILY_QUIZ_REWARD_1="18"
 ENV DAILY_QUIZ_REWARD_2="10"
 ENV DAILY_QUIZ_REWARD_3="5"
 ENV API_CHAT_URL=""
-ENV QUIZ_STATE_PATH="/app/quiz_state.json"
 ENV FIRST_PLACE_REWARD=""
 ENV VOTE_MULTIPLIER="1.25"
 ENV MAJORITY_VOTE_MULTIPLIER="1.50"
-ENV VOTES_FILE_PATH="/app/votes.csv"
+ENV DATA_DIRECTORY="/app/data"
 
 # Set the entry point to your application
 ENTRYPOINT ["dotnet", "Social-Credit-Bot.dll"]

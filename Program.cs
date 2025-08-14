@@ -2742,8 +2742,8 @@ else if (command.Data.Name == "meme")
         
         // Disable the buttons
         var disabledComponent = new ComponentBuilder()
-            .WithButton("✅ Aceptado", "disabled", ButtonStyle.Success, disabled: true)
-            .WithButton("❌ Rechazo", "disabled", ButtonStyle.Secondary, disabled: true)
+            .WithButton("✅ Aceptado", $"accepted_{challengeId}", ButtonStyle.Success, disabled: true)
+            .WithButton("❌ Rechazo", $"rejected_{challengeId}", ButtonStyle.Secondary, disabled: true)
             .Build();
         
         await component.UpdateAsync(x => 
@@ -2798,8 +2798,8 @@ else if (command.Data.Name == "meme")
         
         // Disable the buttons
         var disabledComponent = new ComponentBuilder()
-            .WithButton("✅ Acepto", "disabled", ButtonStyle.Secondary, disabled: true)
-            .WithButton("❌ Rechazado", "disabled", ButtonStyle.Danger, disabled: true)
+            .WithButton("✅ Acepto", $"accept_disabled_{challengeId}", ButtonStyle.Secondary, disabled: true)
+            .WithButton("❌ Rechazado", $"reject_disabled_{challengeId}", ButtonStyle.Danger, disabled: true)
             .Build();
         
         await component.UpdateAsync(x => 
