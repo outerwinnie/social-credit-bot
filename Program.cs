@@ -2103,9 +2103,14 @@ else if (command.Data.Name == "meme")
                     embed.WithImageUrl(nextPuzzle.ImageUrl);
                 }
 
-                embed.AddField("⚡ Acciones", "Responde con `si` para aprobar o `no` para rechazar", false);
+                embed.AddField("⚡ Acciones", "Usa los botones para aprobar o rechazar", false);
 
-                await command.RespondAsync(embed: embed.Build(), ephemeral: true);
+                var components = new ComponentBuilder()
+                    .WithButton("✅ Aprobar", $"puzzle_approve_{nextPuzzle.PuzzleId}", ButtonStyle.Success)
+                    .WithButton("❌ Rechazar", $"puzzle_reject_{nextPuzzle.PuzzleId}", ButtonStyle.Danger)
+                    .Build();
+
+                await command.RespondAsync(embed: embed.Build(), components: components, ephemeral: true);
             }
             else if (command.Data.Name == "resolver")
             {
@@ -2205,7 +2210,108 @@ else if (command.Data.Name == "meme")
         // Handle message-based challenge responses
         if (interaction is SocketMessageComponent component)
         {
-            // Handle button interactions for challenge acceptance/rejection if needed
+            // Handle puzzle approval buttons
+            if (component.Data.CustomId.StartsWith("puzzle_approve_") || component.Data.CustomId.StartsWith("puzzle_reject_"))
+            {
+                // Check if user is admin
+                if (component.User.Id != _adminId)
+                {
+                    await component.RespondAsync("No tienes permiso para usar este botón.", ephemeral: true);
+                    return;
+                }
+
+                var isApproval = component.Data.CustomId.StartsWith("puzzle_approve_");
+                var puzzleId = component.Data.CustomId.Split('_')[2];
+
+                // Find the puzzle in the queue
+                var puzzleFound = false;
+                var tempQueue = new Queue<Puzzle>();
+                Puzzle? targetPuzzle = null;
+
+                while (_pendingPuzzles.Count > 0)
+                {
+                    var puzzle = _pendingPuzzles.Dequeue();
+                    if (puzzle.PuzzleId == puzzleId && !puzzleFound)
+                    {
+                        targetPuzzle = puzzle;
+                        puzzleFound = true;
+                        break;
+                    }
+                    else
+                    {
+                        tempQueue.Enqueue(puzzle);
+                    }
+                }
+
+                // Restore remaining puzzles to queue
+                while (tempQueue.Count > 0)
+                {
+                    _pendingPuzzles.Enqueue(tempQueue.Dequeue());
+                }
+
+                if (!puzzleFound || targetPuzzle == null)
+                {
+                    await component.RespondAsync("❌ Puzzle no encontrado o ya procesado.", ephemeral: true);
+                    return;
+                }
+
+                if (isApproval)
+                {
+                    // Approve puzzle
+                    _activePuzzle = targetPuzzle;
+                    _activePuzzle.IsApproved = true;
+                    _activePuzzle.IsActive = true;
+                    SavePuzzles();
+
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (targetChannel != null)
+                    {
+                        var embed = new EmbedBuilder()
+                            .WithTitle("🧩 ¡Nuevo Puzzle!")
+                            .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                            .WithColor(Color.Blue)
+                            .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                            .AddField("👥 Límite", "3 ganadores", true)
+                            .AddField("🎯 Una oportunidad", "Solo puedes intentar una vez", true);
+
+                        if (!string.IsNullOrEmpty(targetPuzzle.Text))
+                        {
+                            embed.AddField("📝 Puzzle", targetPuzzle.Text, false);
+                        }
+
+                        if (!string.IsNullOrEmpty(targetPuzzle.ImageUrl))
+                        {
+                            embed.WithImageUrl(targetPuzzle.ImageUrl);
+                        }
+
+                        embed.AddField("📝 Cómo resolver", "Usa `/resolver [respuesta]` para participar", false)
+                             .WithFooter($"ID: {targetPuzzle.PuzzleId}")
+                             .WithTimestamp(DateTimeOffset.Now);
+
+                        await targetChannel.SendMessageAsync(embed: embed.Build());
+                    }
+
+                    await component.RespondAsync("✅ Puzzle aprobado y publicado!", ephemeral: true);
+                    Console.WriteLine($"[PUZZLE] Puzzle approved and activated: {targetPuzzle.PuzzleId}");
+                }
+                else
+                {
+                    // Reject puzzle
+                    SavePuzzles();
+                    await component.RespondAsync("❌ Puzzle rechazado y eliminado.", ephemeral: true);
+                    Console.WriteLine($"[PUZZLE] Puzzle rejected: {targetPuzzle.PuzzleId}");
+                }
+
+                // Disable the buttons after use
+                var disabledComponents = new ComponentBuilder()
+                    .WithButton("✅ Aprobado", "disabled", ButtonStyle.Success, disabled: true)
+                    .WithButton("❌ Rechazado", "disabled", ButtonStyle.Danger, disabled: true)
+                    .Build();
+
+                await component.ModifyOriginalResponseAsync(msg => msg.Components = disabledComponents);
+            }
         }
     }
 
@@ -2217,61 +2323,6 @@ else if (command.Data.Name == "meme")
         var content = message.Content.ToLower().Trim();
         var userId = message.Author.Id;
 
-        // Handle puzzle approval (admin only, in DM or any channel)
-        if (userId == _adminId && (content == "si" || content == "no") && _pendingPuzzles.Count > 0)
-        {
-            var puzzle = _pendingPuzzles.Dequeue();
-            
-            if (content == "si")
-            {
-                // Approve puzzle
-                _activePuzzle = puzzle;
-                _activePuzzle.IsApproved = true;
-                _activePuzzle.IsActive = true;
-                SavePuzzles();
-
-                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                if (targetChannel != null)
-                {
-                    var embed = new EmbedBuilder()
-                        .WithTitle("🧩 ¡Nuevo Puzzle!")
-                        .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
-                        .WithColor(Color.Blue)
-                        .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
-                        .AddField("👥 Límite", "3 ganadores", true)
-                        .AddField("🎯 Una oportunidad", "Solo puedes intentar una vez", true);
-
-                    if (!string.IsNullOrEmpty(puzzle.Text))
-                    {
-                        embed.AddField("📝 Puzzle", puzzle.Text, false);
-                    }
-
-                    if (!string.IsNullOrEmpty(puzzle.ImageUrl))
-                    {
-                        embed.WithImageUrl(puzzle.ImageUrl);
-                    }
-
-                    embed.AddField("📝 Cómo resolver", "Usa `/resolver [respuesta]` para participar", false)
-                         .WithFooter($"ID: {puzzle.PuzzleId}")
-                         .WithTimestamp(DateTimeOffset.Now);
-
-                    await targetChannel.SendMessageAsync(embed: embed.Build());
-                }
-
-                await message.Channel.SendMessageAsync("✅ Puzzle aprobado y publicado!");
-                Console.WriteLine($"[PUZZLE] Puzzle approved and activated: {puzzle.PuzzleId}");
-            }
-            else
-            {
-                // Reject puzzle
-                SavePuzzles();
-                await message.Channel.SendMessageAsync("❌ Puzzle rechazado y eliminado.");
-                Console.WriteLine($"[PUZZLE] Puzzle rejected: {puzzle.PuzzleId}");
-            }
-            return;
-        }
 
         // Only process messages in the target channel for other commands
         var targetChannelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
