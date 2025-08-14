@@ -71,6 +71,8 @@ class Bot
         public ulong ChallengedId { get; set; }
         public int BetAmount { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? AcceptedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
         public bool IsAccepted { get; set; }
         public string? ImageUrl { get; set; }
         public Dictionary<ulong, int> GuessAttempts { get; set; } = new Dictionary<ulong, int>();
@@ -1859,12 +1861,12 @@ else if (command.Data.Name == "meme")
                         .WithStyle(ButtonStyle.Danger)
                         .WithCustomId($"reject_challenge_{challengeId}");
 
-                    var component = new ComponentBuilder()
+                    var buttonComponent = new ComponentBuilder()
                         .WithButton(acceptButton)
                         .WithButton(rejectButton)
                         .Build();
 
-                    await targetChannel.SendMessageAsync(embed: embed, components: component);
+                    await targetChannel.SendMessageAsync(embed: embed, components: buttonComponent);
                 }
 
                 await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
