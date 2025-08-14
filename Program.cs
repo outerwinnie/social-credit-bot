@@ -2312,13 +2312,12 @@ else if (command.Data.Name == "meme")
                         }
 
                         embed.AddField("📝 Cómo resolver", "Usa `/resolver [respuesta]` para participar", false)
-                             .WithFooter($"ID: {targetPuzzle.PuzzleId}")
                              .WithTimestamp(DateTimeOffset.Now);
 
                         await targetChannel.SendMessageAsync(embed: embed.Build());
                     }
 
-                    await component.RespondAsync("✅ Puzzle aprobado y publicado!", ephemeral: true);
+                    await component.DeferAsync();
                     Console.WriteLine($"[PUZZLE] Puzzle approved and activated: {targetPuzzle.PuzzleId}");
                 }
                 else
