@@ -923,9 +923,9 @@ class Bot
                 .WithType(ApplicationCommandOptionType.String))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("imagen")
-                .WithDescription("URL de imagen o video (opcional)")
+                .WithDescription("Imagen o video del puzzle (opcional)")
                 .WithRequired(false)
-                .WithType(ApplicationCommandOptionType.String));
+                .WithType(ApplicationCommandOptionType.Attachment));
         
         var puzzleGuildCommand = puzzleCommand.Build();
         await _client.Rest.CreateGuildCommand(puzzleGuildCommand, _guildId);
@@ -2043,13 +2043,19 @@ else if (command.Data.Name == "meme")
                     return;
                 }
 
+                string? imageUrl = null;
+                if (imagenOption?.Value is Attachment attachment)
+                {
+                    imageUrl = attachment.Url;
+                }
+
                 var puzzle = new Puzzle
                 {
                     PuzzleId = Guid.NewGuid().ToString(),
                     CreatorId = command.User.Id,
                     CorrectAnswer = respuestaOption.Value.ToString()!.Trim(),
                     Text = textoOption?.Value?.ToString(),
-                    ImageUrl = imagenOption?.Value?.ToString(),
+                    ImageUrl = imageUrl,
                     CreatedAt = DateTime.Now
                 };
 
