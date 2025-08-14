@@ -68,6 +68,8 @@ class Bot
         public bool IsAccepted { get; set; }
         public string? ImageUrl { get; set; }
         public Dictionary<ulong, int> GuessAttempts { get; set; } = new Dictionary<ulong, int>();
+        public int ChallengerAttempts { get; set; } = 0;
+        public int ChallengedAttempts { get; set; } = 0;
         public ulong? WinnerId { get; set; }
         public bool IsCompleted { get; set; }
     }
