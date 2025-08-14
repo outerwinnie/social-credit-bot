@@ -230,8 +230,8 @@ class Bot
                 _activeRetarChallenges.Clear();
                 foreach (var kvp in challenges)
                 {
-                    // Remove expired challenges (older than 1 hour)
-                    if (DateTime.Now - kvp.Value.CreatedAt < TimeSpan.FromHours(1))
+                    // Remove expired challenges (older than 24 hours)
+                    if (DateTime.Now - kvp.Value.CreatedAt < TimeSpan.FromHours(24))
                     {
                         _activeRetarChallenges[kvp.Key] = kvp.Value;
                     }
@@ -1594,6 +1594,19 @@ else if (command.Data.Name == "meme")
                     return;
                 }
 
+                // Check if challenger has created a challenge in the last 24 hours
+                var recentChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
+                    c.ChallengerId == challengerId && 
+                    DateTime.Now - c.CreatedAt < TimeSpan.FromHours(24));
+
+                if (recentChallenge != null)
+                {
+                    var timeRemaining = TimeSpan.FromHours(24) - (DateTime.Now - recentChallenge.CreatedAt);
+                    var hoursLeft = (int)Math.Ceiling(timeRemaining.TotalHours);
+                    await command.RespondAsync($"Solo puedes crear un reto cada 24 horas. Podrás crear otro reto en {hoursLeft} horas.", ephemeral: true);
+                    return;
+                }
+
                 // Create new challenge
                 string challengeId = Guid.NewGuid().ToString();
                 var challenge = new RetarChallenge
@@ -1621,7 +1634,7 @@ else if (command.Data.Name == "meme")
                         .WithDescription($"<@{challengerId}> ha retado a <@{challengedId}> a una apuesta de **{betAmount} créditos**!")
                         .WithColor(Color.Orange)
                         .AddField("💰 Apuesta", $"{betAmount} créditos", true)
-                        .AddField("⏰ Expira en", "1 hora", true)
+                        .AddField("⏰ Expira en", "24 horas", true)
                         .AddField("📝 Instrucciones", 
                             $"<@{challengedId}> puede usar `/acepto` o `/rechazo` para responder", false)
                         .WithTimestamp(DateTimeOffset.Now)
@@ -1630,7 +1643,7 @@ else if (command.Data.Name == "meme")
                     await targetChannel.SendMessageAsync(embed: embed);
                 }
 
-                await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 1 hora para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
+                await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
                 Console.WriteLine($"[RETAR] Challenge created: {challengerId} -> {challengedId} for {betAmount} credits");
             }
             else if (command.Data.Name == "acepto")
