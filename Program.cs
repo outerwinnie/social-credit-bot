@@ -46,12 +46,57 @@ class Bot
     private HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private List<ulong> _revelarCorrectUsers = new List<ulong>();
     private readonly string _quizStatePath; // now instance field
+    
+    // Retar challenge system
+    private readonly Dictionary<string, RetarChallenge> _activeRetarChallenges = new Dictionary<string, RetarChallenge>();
+    private readonly string _retarChallengesPath;
+
+    // Puzzle system
+    private readonly Queue<Puzzle> _pendingPuzzles = new Queue<Puzzle>();
+    private Puzzle? _activePuzzle = null;
+    private readonly string _puzzlesPath;
+    private readonly int _puzzleReward;
 
     private class QuizState
     {
         public string? Uploader { get; set; }
         public List<ulong> CorrectUsers { get; set; } = new List<ulong>();
         public List<ulong> TriedUsers { get; set; } = new List<ulong>();
+    }
+    
+    private class RetarChallenge
+    {
+        public string ChallengeId { get; set; } = string.Empty;
+        public ulong ChallengerId { get; set; }
+        public ulong ChallengedId { get; set; }
+        public int BetAmount { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? AcceptedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public bool IsAccepted { get; set; }
+        public string? ImageUrl { get; set; }
+        public Dictionary<ulong, int> GuessAttempts { get; set; } = new Dictionary<ulong, int>();
+        public int ChallengerAttempts { get; set; } = 0;
+        public int ChallengedAttempts { get; set; } = 0;
+        public ulong? WinnerId { get; set; }
+        public bool IsCompleted { get; set; }
+        public ulong MessageId { get; set; }
+        public ulong ChannelId { get; set; }
+    }
+
+    private class Puzzle
+    {
+        public string PuzzleId { get; set; } = string.Empty;
+        public ulong CreatorId { get; set; }
+        public string? Text { get; set; }
+        public string CorrectAnswer { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? ActivatedAt { get; set; }
+        public bool IsApproved { get; set; } = false;
+        public bool IsActive { get; set; } = false;
+        public List<ulong> CorrectSolvers { get; set; } = new List<ulong>();
+        public HashSet<ulong> AttemptedUsers { get; set; } = new HashSet<ulong>();
     }
 
     private void SaveQuizState()
@@ -85,20 +130,31 @@ class Bot
     {
         try
         {
+            Console.WriteLine($"[DEBUG] Loading quiz state from: {_quizStatePath}");
             if (!File.Exists(_quizStatePath))
             {
+                Console.WriteLine("[DEBUG] Quiz state file does not exist, initializing empty state");
                 _uploader = string.Empty;
                 _revelarCorrectUsers.Clear();
                 _revelarTriedUsers.Clear();
                 return;
             }
             var json = File.ReadAllText(_quizStatePath, Encoding.UTF8);
+            Console.WriteLine($"[DEBUG] Quiz state JSON content: {json}");
             var state = System.Text.Json.JsonSerializer.Deserialize<QuizState>(json);
             if (state != null)
             {
                 _uploader = state.Uploader ?? string.Empty;
                 _revelarCorrectUsers = state.CorrectUsers ?? new List<ulong>();
                 _revelarTriedUsers = state.TriedUsers != null ? new HashSet<ulong>(state.TriedUsers) : new HashSet<ulong>();
+                Console.WriteLine($"[DEBUG] Loaded quiz state - Uploader: '{_uploader}', Correct users: {_revelarCorrectUsers.Count}, Tried users: {_revelarTriedUsers.Count}");
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] Quiz state deserialization returned null");
+                _uploader = string.Empty;
+                _revelarCorrectUsers.Clear();
+                _revelarTriedUsers.Clear();
             }
         }
         catch (Exception ex)
@@ -122,15 +178,26 @@ class Bot
             GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers
         };
         
-        _quizStatePath = Environment.GetEnvironmentVariable("QUIZ_STATE_PATH") ?? "quiz_state.json";
+        // Get base data directory from environment variable, default to current directory
+        var dataDirectory = Environment.GetEnvironmentVariable("DATA_DIRECTORY") ?? Environment.CurrentDirectory;
+        
+        // Combine base directory with each filename
+        _quizStatePath = Path.Combine(dataDirectory, "quiz_state.json");
+        _retarChallengesPath = Path.Combine(dataDirectory, "retar_challenges.json");
+        _puzzlesPath = Path.Combine(dataDirectory, "puzzles.json");
+        _csvFilePath = Path.Combine(dataDirectory, "user_reactions.csv");
+        _ignoredUsersFilePath = Path.Combine(dataDirectory, "ignored_users.csv");
+        _rewardsFilePath = Path.Combine(dataDirectory, "rewards.csv");
+        _votesFilePath = Path.Combine(dataDirectory, "votes.csv");
+        _revelarLeaderboardPath = Path.Combine(dataDirectory, "revelar_leaderboard.json");
+        
         LoadQuizState();
-        _client = new DiscordSocketClient(config);
-        _csvFilePath = Environment.GetEnvironmentVariable("CSV_FILE_PATH") ?? "user_reactions.csv";
-        _ignoredUsersFilePath = Environment.GetEnvironmentVariable("IGNORED_USERS_FILE_PATH") ?? "ignored_users.csv";
-        _rewardsFilePath = Environment.GetEnvironmentVariable("REWARDS_FILE_PATH") ?? "rewards.csv";
-        _votesFilePath = Environment.GetEnvironmentVariable("VOTES_FILE_PATH") ?? "votes.csv";
         LoadVotes();
-        _revelarLeaderboardPath = Environment.GetEnvironmentVariable("REVELAR_LEADERBOARD_PATH") ?? "revelar_leaderboard.json";
+        LoadRetarChallenges();
+        LoadPuzzles();
+        CheckPuzzleExpiration(); // Check for expired puzzles on startup
+        _client = new DiscordSocketClient(config);
+        LoadVotes();
         LoadRevelarLeaderboard();
         _dailyTaskTime = Environment.GetEnvironmentVariable("DAILY_TASK_TIME") ?? "18:00";
         _dailyTaskReward = Environment.GetEnvironmentVariable("DAILY_TASK_REWARD") ?? "image";
@@ -148,7 +215,12 @@ class Bot
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("MEME_PRICE"), out _memePrice))
         {
-            _memePrice = 25; // Default value if the environment variable is not set or invalid
+            _memePrice = 40; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!int.TryParse(Environment.GetEnvironmentVariable("PUZZLE_REWARD"), out _puzzleReward))
+        {
+            _puzzleReward = 50; // Default value if the environment variable is not set or invalid
         }
 
         if (!int.TryParse(Environment.GetEnvironmentVariable("DAILY_QUIZ_REWARD_1"), out _dailyQuizReward_1))
@@ -184,6 +256,150 @@ class Bot
 
     // Ensure quiz state file exists on startup
     SaveQuizState();
+    }
+    
+    private void LoadRetarChallenges()
+    {
+        try
+        {
+            if (!File.Exists(_retarChallengesPath))
+            {
+                _activeRetarChallenges.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_retarChallengesPath, Encoding.UTF8);
+            var challenges = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, RetarChallenge>>(json);
+            if (challenges != null)
+            {
+                _activeRetarChallenges.Clear();
+                foreach (var kvp in challenges)
+                {
+                    // Remove expired challenges (older than 24 hours)
+                    if (DateTime.Now - kvp.Value.CreatedAt < TimeSpan.FromHours(24))
+                    {
+                        _activeRetarChallenges[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading retar challenges: {ex.Message}");
+            _activeRetarChallenges.Clear();
+        }
+    }
+    
+    private void SaveRetarChallenges()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_activeRetarChallenges, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_retarChallengesPath, json, Encoding.UTF8);
+            Console.WriteLine($"[RETAR] Challenges saved to {_retarChallengesPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving retar challenges: {ex.Message}");
+        }
+    }
+
+    private void LoadPuzzles()
+    {
+        try
+        {
+            if (!File.Exists(_puzzlesPath))
+            {
+                _pendingPuzzles.Clear();
+                _activePuzzle = null;
+                return;
+            }
+            var json = File.ReadAllText(_puzzlesPath, Encoding.UTF8);
+            var puzzleData = System.Text.Json.JsonSerializer.Deserialize<PuzzleData>(json);
+            if (puzzleData != null)
+            {
+                _pendingPuzzles.Clear();
+                foreach (var puzzle in puzzleData.PendingPuzzles)
+                {
+                    _pendingPuzzles.Enqueue(puzzle);
+                }
+                _activePuzzle = puzzleData.ActivePuzzle;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading puzzles: {ex.Message}");
+            _pendingPuzzles.Clear();
+            _activePuzzle = null;
+        }
+    }
+
+    private void SavePuzzles()
+    {
+        try
+        {
+            var puzzleData = new PuzzleData
+            {
+                PendingPuzzles = _pendingPuzzles.ToList(),
+                ActivePuzzle = _activePuzzle
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(puzzleData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_puzzlesPath, json, Encoding.UTF8);
+            Console.WriteLine($"[PUZZLE] Puzzles saved to {_puzzlesPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving puzzles: {ex.Message}");
+        }
+    }
+
+    private class PuzzleData
+    {
+        public List<Puzzle> PendingPuzzles { get; set; } = new List<Puzzle>();
+        public Puzzle? ActivePuzzle { get; set; }
+    }
+
+    private void CheckPuzzleExpiration()
+    {
+        if (_activePuzzle != null && _activePuzzle.ActivatedAt.HasValue)
+        {
+            var timeSinceActivation = DateTime.Now - _activePuzzle.ActivatedAt.Value;
+            if (timeSinceActivation >= TimeSpan.FromHours(24))
+            {
+                Console.WriteLine($"[PUZZLE] Puzzle expired after 24 hours: {_activePuzzle.PuzzleId}");
+                
+                // Announce expiration in channel
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                        if (targetChannel != null)
+                        {
+                            var embed = new EmbedBuilder()
+                                .WithTitle("⏰ Puzzle Expirado")
+                                .WithDescription("El puzzle activo ha expirado después de 24 horas.")
+                                .WithColor(Color.Orange)
+                                .AddField("✅ Respuesta Correcta", _activePuzzle.CorrectAnswer, false)
+                                .AddField("🏆 Ganadores", _activePuzzle.CorrectSolvers.Count > 0 ? 
+                                    string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
+                                .WithTimestamp(DateTimeOffset.Now)
+                                .Build();
+
+                            await targetChannel.SendMessageAsync(embed: embed);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error announcing puzzle expiration: {ex.Message}");
+                    }
+                });
+
+                _activePuzzle = null;
+                SavePuzzles();
+            }
+        }
     }
 
     private void LoadVotes()
@@ -291,6 +507,8 @@ class Bot
         _client.ReactionAdded += ReactionAddedAsync;
         _client.Ready += ReadyAsync;
         _client.InteractionCreated += InteractionCreated;
+        _client.ButtonExecuted += ButtonExecuted;
+        _client.MessageReceived += MessageReceived;
 
         var token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
         if (string.IsNullOrEmpty(token))
@@ -316,13 +534,40 @@ class Bot
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
         Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
         
+        // Schedule challenge cleanup every hour
+        ScheduleChallengeCleanup();
+        
         // Schedule daily task
         ScheduleDailyTask();
         Console.WriteLine($"DAILY_TASK_TIME: {_dailyTaskTime}");
         Console.WriteLine($"DAILY_TASK_REWARD: {_dailyTaskReward}");
 
+        // Schedule periodic puzzle expiration checks
+        SchedulePuzzleExpirationCheck();
+
         // Schedule monthly leaderboard announcement
         ScheduleMonthlyLeaderboardAnnouncement();
+    }
+
+    // Schedules periodic puzzle expiration checks every 30 minutes
+    private void SchedulePuzzleExpirationCheck()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(30)); // Check every 30 minutes
+                    CheckPuzzleExpiration();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in puzzle expiration check: {ex.Message}");
+                }
+            }
+        });
+        Console.WriteLine("Puzzle expiration check scheduled to run every 30 minutes.");
     }
 
     // Schedules leaderboard announcement on the first day of each month at 00:05
@@ -626,7 +871,7 @@ class Bot
 
         var dailyQuizCommand = new SlashCommandBuilder()
             .WithName("revelar")
-            .WithDescription($"Revela a el usuario que compartio la imagen")
+            .WithDescription($"Revela a el usuario que compartio la imagen originalmente")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a revelar")
@@ -639,7 +884,7 @@ class Bot
 
         var voteCommand = new SlashCommandBuilder()
             .WithName("votar")
-            .WithDescription("Vota por el usuario que crees que ganará y apuesta créditos")
+            .WithDescription("Vota por el usuario que crees que quedara primero en la clasificacion y apuesta créditos")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a votar")
@@ -688,6 +933,96 @@ class Bot
         var leaderboardGuildCommand = leaderboardCommand.Build();
         await _client.Rest.CreateGuildCommand(leaderboardGuildCommand, _guildId);
         Console.WriteLine("Slash command 'leaderboard' registered for the guild.");
+
+        // Retar challenge command
+        var retarCommand = new SlashCommandBuilder()
+            .WithName("retar")
+            .WithDescription("Reta a otro usuario a una apuesta de 'Recuerdate'")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario a retar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("creditos")
+                .WithDescription("Cantidad de créditos a apostar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.Integer));
+        
+        var retarGuildCommand = retarCommand.Build();
+        await _client.Rest.CreateGuildCommand(retarGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'retar' registered for the guild.");
+
+
+        // Guess challenge command
+        var adivinoCommand = new SlashCommandBuilder()
+            .WithName("adivino")
+            .WithDescription("Adivina quien compartio la imagen en tu reto activo")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario que crees que compartio la imagen")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User));
+        
+        var adivinoGuildCommand = adivinoCommand.Build();
+        await _client.Rest.CreateGuildCommand(adivinoGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'adivino' registered for the guild.");
+
+        // Puzzle creation command
+        var puzzleCommand = new SlashCommandBuilder()
+            .WithName("puzzle")
+            .WithDescription("Crea un puzzle para que otros usuarios lo resuelvan")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("respuesta")
+                .WithDescription("La respuesta correcta del puzzle")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("texto")
+                .WithDescription("Texto del puzzle (opcional)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.String))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("imagen")
+                .WithDescription("Imagen o video del puzzle (opcional)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.Attachment));
+        
+        var puzzleGuildCommand = puzzleCommand.Build();
+        await _client.Rest.CreateGuildCommand(puzzleGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'puzzle' registered for the guild.");
+
+        // Puzzle approval command (admin only)
+        var aprovarCommand = new SlashCommandBuilder()
+            .WithName("aprovar")
+            .WithDescription("Aprueba o rechaza puzzles pendientes (solo admin)");
+        
+        var aprovarGuildCommand = aprovarCommand.Build();
+        await _client.Rest.CreateGuildCommand(aprovarGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'aprovar' registered for the guild.");
+
+        // Puzzle solving command
+        var resolverCommand = new SlashCommandBuilder()
+            .WithName("resolver")
+            .WithDescription($"Resuelve el puzzle activo (recompensa: {_puzzleReward} créditos)")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("respuesta")
+                .WithDescription("Tu respuesta al puzzle")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String));
+        
+        var resolverGuildCommand = resolverCommand.Build();
+        await _client.Rest.CreateGuildCommand(resolverGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'resolver' registered for the guild.");
+
+        // Force puzzle expiration command (admin only)
+        var finalizarPuzzleCommand = new SlashCommandBuilder()
+            .WithName("finalizar-puzzle")
+            .WithDescription("Finaliza el puzzle activo inmediatamente (solo admin)");
+        
+        var finalizarPuzzleGuildCommand = finalizarPuzzleCommand.Build();
+        await _client.Rest.CreateGuildCommand(finalizarPuzzleGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'finalizar-puzzle' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -851,6 +1186,52 @@ private void ScheduleDailyTask()
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
     }
+
+    // Separate method for retar challenges that doesn't interfere with /revelar
+    public async Task<string?> SendRetarImageAsync()
+    {
+        try
+        {
+            var url = $"{_apiUrl}image";
+            Console.WriteLine($"[RETAR] Sending image request: {url}");
+
+            var jsonData = "{ \"yourField\": \"value\" }";
+            var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            var response = await Client.PostAsync(url, content);
+            response.EnsureSuccessStatusCode();
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[RETAR] Response: {responseBody}");
+
+            // Parse JSON and extract 'uploader' for this specific challenge
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+                if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
+                {
+                    var uploader = uploaderProp.GetString();
+                    Console.WriteLine($"[RETAR] Challenge uploader: {uploader}");
+                    return uploader;
+                }
+                else
+                {
+                    Console.WriteLine("[RETAR] No 'uploader' property found in response.");
+                    return null;
+                }
+            }
+            catch (Exception jsonEx)
+            {
+                Console.WriteLine($"[RETAR] Error parsing JSON: {jsonEx.Message}");
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RETAR] Error: {ex.Message}");
+            return null;
+        }
+    }
     
     private async Task InteractionCreated(SocketInteraction interaction)
     {
@@ -900,7 +1281,7 @@ private void ScheduleDailyTask()
                     else
                     {
                         
-                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} creditos.", ephemeral: true);
+                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} créditos.", ephemeral: true);
                     }
                 }
                 else
@@ -1027,6 +1408,11 @@ else if (command.Data.Name == "descontar")
 
             else if (command.Data.Name == "revelar")
             {
+                Console.WriteLine($"[DEBUG] /revelar command called by user {command.User.Id}");
+                Console.WriteLine($"[DEBUG] Current _uploader value: '{_uploader}'");
+                Console.WriteLine($"[DEBUG] _uploader == string.Empty: {_uploader == string.Empty}");
+                Console.WriteLine($"[DEBUG] string.IsNullOrEmpty(_uploader): {string.IsNullOrEmpty(_uploader)}");
+                
                 if (IsQuizFreezePeriod())
                 {
                     await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
@@ -1035,6 +1421,7 @@ else if (command.Data.Name == "descontar")
 
                 if (_uploader == string.Empty)
                 {
+                    Console.WriteLine("[DEBUG] _uploader is empty, sending error message");
                     await command.RespondAsync("La imagen aun no ha sido enviada, espera a que se envie y vuelve a intentarlo.", ephemeral: true);
                     return;
                 }
@@ -1183,7 +1570,7 @@ else if (command.Data.Name == "descontar")
                 }
                 else
                 {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
                 }
             }
             
@@ -1254,7 +1641,7 @@ else if (command.Data.Name == "descontar")
 
     if (userOption == null || amountOption == null)
     {
-        await command.RespondAsync("No es posible, comprueba los parametros.", ephemeral: true);
+        await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
         return;
     }
 
@@ -1273,14 +1660,14 @@ else if (command.Data.Name == "descontar")
     }
     if (senderId == recipientId)
     {
-        await command.RespondAsync("No puedes regalarte creditos a ti mismo.", ephemeral: true);
+        await command.RespondAsync("No puedes regalarte créditos a ti mismo.", ephemeral: true);
         return;
     }
 
     LoadData();
     if (!_userReactionCounts.ContainsKey(senderId) || _userReactionCounts[senderId] < amount)
     {
-        await command.RespondAsync($"No tienes suficientes creditos para regalar {amount}.", ephemeral: true);
+        await command.RespondAsync($"No tienes suficientes créditos para regalar {amount}.", ephemeral: true);
         return;
     }
 
@@ -1293,17 +1680,17 @@ else if (command.Data.Name == "descontar")
     SaveData();
 
     // Confirmation to sender
-    await command.RespondAsync($"Has regalado {amount} creditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
+    await command.RespondAsync($"Has regalado {amount} créditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
 
     // Notify recipient in channel
     var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
     var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
     if (targetChannel != null)
     {
-        await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} creditos a <@{recipientId}>!");
+        await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
     }
 
-    Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} creditos");
+    Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} créditos");
 }
 else if (command.Data.Name == "meme")
             {
@@ -1361,7 +1748,859 @@ else if (command.Data.Name == "meme")
                 }
                 else
                 {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} creditos.", ephemeral: true);
+                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
+                }
+            }
+            else if (command.Data.Name == "retar")
+            {
+                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+                var creditosOption = command.Data.Options.FirstOrDefault(o => o.Name == "creditos");
+
+                if (userOption == null || creditosOption == null)
+                {
+                    await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
+                    return;
+                }
+
+                var challengedUser = userOption.Value as SocketUser;
+                if (challengedUser == null)
+                {
+                    await command.RespondAsync("Usuario inválido.", ephemeral: true);
+                    return;
+                }
+
+                if (!int.TryParse(creditosOption.Value?.ToString(), out int betAmount) || betAmount <= 0)
+                {
+                    await command.RespondAsync("La cantidad de créditos debe ser un número positivo.", ephemeral: true);
+                    return;
+                }
+
+                ulong challengerId = command.User.Id;
+                ulong challengedId = challengedUser.Id;
+
+                if (challengerId == challengedId)
+                {
+                    await command.RespondAsync("No puedes retarte a ti mismo.", ephemeral: true);
+                    return;
+                }
+
+                // Check if challenger has enough credits
+                LoadData();
+                if (!_userReactionCounts.ContainsKey(challengerId) || _userReactionCounts[challengerId] < betAmount)
+                {
+                    await command.RespondAsync($"No tienes suficientes créditos. Necesitas {betAmount} créditos para esta apuesta.", ephemeral: true);
+                    return;
+                }
+
+                // Check if challenged user has enough credits
+                if (!_userReactionCounts.ContainsKey(challengedId) || _userReactionCounts[challengedId] < betAmount)
+                {
+                    await command.RespondAsync($"<@{challengedId}> no tiene suficientes créditos para aceptar esta apuesta.", ephemeral: true);
+                    return;
+                }
+
+                // Check for existing active challenges between these users
+                var existingChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
+                    (c.ChallengerId == challengerId && c.ChallengedId == challengedId) ||
+                    (c.ChallengerId == challengedId && c.ChallengedId == challengerId));
+
+                if (existingChallenge != null && !existingChallenge.IsCompleted)
+                {
+                    await command.RespondAsync("Ya existe un reto activo entre ustedes. Completen el reto actual antes de crear uno nuevo.", ephemeral: true);
+                    return;
+                }
+
+                // Check if challenger has created a challenge in the last 24 hours
+                var recentChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
+                    c.ChallengerId == challengerId && 
+                    DateTime.Now - c.CreatedAt < TimeSpan.FromHours(24));
+
+                if (recentChallenge != null)
+                {
+                    var timeRemaining = TimeSpan.FromHours(24) - (DateTime.Now - recentChallenge.CreatedAt);
+                    var hoursLeft = (int)Math.Ceiling(timeRemaining.TotalHours);
+                    await command.RespondAsync($"Solo puedes crear un reto cada 24 horas. Podrás crear otro reto en {hoursLeft} horas.", ephemeral: true);
+                    return;
+                }
+
+                // Create new challenge
+                string challengeId = Guid.NewGuid().ToString();
+                var challenge = new RetarChallenge
+                {
+                    ChallengeId = challengeId,
+                    ChallengerId = challengerId,
+                    ChallengedId = challengedId,
+                    BetAmount = betAmount,
+                    CreatedAt = DateTime.Now,
+                    IsAccepted = false,
+                    IsCompleted = false
+                };
+
+                _activeRetarChallenges[challengeId] = challenge;
+                SaveRetarChallenges();
+
+                // Send challenge message to target channel with buttons
+                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                if (targetChannel != null)
+                {
+                    var embed = new EmbedBuilder()
+                        .WithTitle("🎯 ¡Nuevo Reto!")
+                        .WithDescription($"<@{challengerId}> ha retado a <@{challengedId}> a una apuesta de **{betAmount} créditos**!")
+                        .WithColor(Color.Orange)
+                        .AddField("💰 Apuesta", $"{betAmount} créditos", true)
+                        .AddField("⏰ Expira en", "24 horas", true)
+                        .AddField("📝 Instrucciones", 
+                            $"<@{challengedId}> puede usar los botones de abajo para responder", false)
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    var acceptButton = new ButtonBuilder()
+                        .WithLabel("✅ Acepto")
+                        .WithStyle(ButtonStyle.Success)
+                        .WithCustomId($"accept_challenge_{challengeId}");
+
+                    var rejectButton = new ButtonBuilder()
+                        .WithLabel("❌ Rechazo")
+                        .WithStyle(ButtonStyle.Danger)
+                        .WithCustomId($"reject_challenge_{challengeId}");
+
+                    var buttonComponent = new ComponentBuilder()
+                        .WithButton(acceptButton)
+                        .WithButton(rejectButton)
+                        .Build();
+
+                    var message = await targetChannel.SendMessageAsync(embed: embed, components: buttonComponent);
+                    
+                    // Store message info for later button removal
+                    challenge.MessageId = message.Id;
+                    challenge.ChannelId = channelId;
+                    SaveRetarChallenges();
+                }
+
+                await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
+                Console.WriteLine($"[RETAR] Challenge created: {challengerId} -> {challengedId} for {betAmount} credits");
+            }
+            else if (command.Data.Name == "adivino")
+            {
+                var userId = command.User.Id;
+                var guessedUser = (IUser)command.Data.Options.First().Value;
+                var guessedUsername = guessedUser.Username;
+
+                // Find active challenge where this user is a participant
+                var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
+                    (c.ChallengerId == userId || c.ChallengedId == userId) && 
+                    c.IsAccepted && !c.IsCompleted);
+
+                if (challenge == null)
+                {
+                    await command.RespondAsync("No tienes ningún reto activo para adivinar.", ephemeral: true);
+                    return;
+                }
+
+                // Check if user has attempts left
+                if (userId == challenge.ChallengerId)
+                {
+                    if (challenge.ChallengerAttempts >= 2)
+                    {
+                        await command.RespondAsync("Ya has usado todos tus intentos.", ephemeral: true);
+                        return;
+                    }
+                    challenge.ChallengerAttempts++;
+                }
+                else
+                {
+                    if (challenge.ChallengedAttempts >= 2)
+                    {
+                        await command.RespondAsync("Ya has usado todos tus intentos.", ephemeral: true);
+                        return;
+                    }
+                    challenge.ChallengedAttempts++;
+                }
+
+                SaveRetarChallenges();
+
+                // Check answer by comparing with the uploader stored in challenge.ImageUrl
+                try
+                {
+                    bool isCorrect = challenge.ImageUrl != null && challenge.ImageUrl.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
+
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (isCorrect)
+                    {
+                        // User wins - transfer credits
+                        LoadData();
+                        _userReactionCounts[userId] += challenge.BetAmount * 2;
+                        SaveData();
+
+                        challenge.IsCompleted = true;
+                        challenge.WinnerId = userId;
+                        SaveRetarChallenges();
+
+                        if (targetChannel != null)
+                        {
+                            var embed = new EmbedBuilder()
+                                .WithTitle("🎉 ¡Reto Completado!")
+                                .WithDescription($"<@{userId}> ha adivinado correctamente!")
+                                .WithColor(Color.Green)
+                                .AddField("🏆 Ganador", $"<@{userId}>", true)
+                                .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
+                                .AddField("✅ Respuesta Correcta", $"@{guessedUsername}", false)
+                                .WithTimestamp(DateTimeOffset.Now)
+                                .Build();
+
+                            await targetChannel.SendMessageAsync(embed: embed);
+                        }
+
+                        await command.RespondAsync($"¡Correcto! Has ganado {challenge.BetAmount * 2} créditos.", ephemeral: true);
+                        Console.WriteLine($"[RETAR] Challenge won by {userId}: {challenge.ChallengeId}");
+                    }
+                    else
+                    {
+                        // Wrong answer
+                        int attemptsLeft = userId == challenge.ChallengerId ? 
+                            (2 - challenge.ChallengerAttempts) : (2 - challenge.ChallengedAttempts);
+
+                        if (targetChannel != null)
+                        {
+                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Le quedan {attemptsLeft} intentos.");
+                        }
+
+                        await command.RespondAsync($"Incorrecto. Te quedan {attemptsLeft} intentos.", ephemeral: true);
+
+                        // Check if both players have used all attempts
+                        if (challenge.ChallengerAttempts >= 2 && challenge.ChallengedAttempts >= 2)
+                        {
+                            challenge.IsCompleted = true;
+                            SaveRetarChallenges();
+
+                            if (targetChannel != null)
+                            {
+                                var embed = new EmbedBuilder()
+                                    .WithTitle("💸 Reto Fallido")
+                                    .WithDescription("Ambos jugadores han fallado todas sus oportunidades.")
+                                    .WithColor(Color.Red)
+                                    .AddField("💔 Resultado", "Nadie gana", true)
+                                    .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
+                                    .AddField("✅ Respuesta Correcta", $"@{challenge.ImageUrl ?? "Desconocida"}", false)
+                                    .WithTimestamp(DateTimeOffset.Now)
+                                    .Build();
+
+                                await targetChannel.SendMessageAsync(embed: embed);
+                            }
+
+                            Console.WriteLine($"[RETAR] Challenge failed by both players: {challenge.ChallengeId}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error checking answer: {ex.Message}");
+                    await command.RespondAsync("Error al verificar la respuesta. Inténtalo de nuevo.", ephemeral: true);
+                }
+            }
+            else if (command.Data.Name == "puzzle")
+            {
+                var respuestaOption = command.Data.Options.FirstOrDefault(o => o.Name == "respuesta");
+                var textoOption = command.Data.Options.FirstOrDefault(o => o.Name == "texto");
+                var imagenOption = command.Data.Options.FirstOrDefault(o => o.Name == "imagen");
+
+                if (respuestaOption == null)
+                {
+                    await command.RespondAsync("Debes proporcionar una respuesta correcta.", ephemeral: true);
+                    return;
+                }
+
+                string? imageUrl = null;
+                if (imagenOption?.Value is Attachment attachment)
+                {
+                    imageUrl = attachment.Url;
+                }
+
+                var puzzle = new Puzzle
+                {
+                    PuzzleId = Guid.NewGuid().ToString(),
+                    CreatorId = command.User.Id,
+                    CorrectAnswer = respuestaOption.Value.ToString()!.Trim(),
+                    Text = textoOption?.Value?.ToString(),
+                    ImageUrl = imageUrl,
+                    CreatedAt = DateTime.Now
+                };
+
+                _pendingPuzzles.Enqueue(puzzle);
+                SavePuzzles();
+
+                await command.RespondAsync($"✅ Tu puzzle ha sido enviado para aprobación. ID: `{puzzle.PuzzleId}`", ephemeral: true);
+                Console.WriteLine($"[PUZZLE] New puzzle created by {command.User.Username}: {puzzle.PuzzleId}");
+            }
+            else if (command.Data.Name == "aprovar")
+            {
+                // Check if user is admin
+                if (command.User.Id != _adminId)
+                {
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+
+                if (_pendingPuzzles.Count == 0)
+                {
+                    await command.RespondAsync("No hay puzzles pendientes de aprobación.", ephemeral: true);
+                    return;
+                }
+
+                if (_activePuzzle != null)
+                {
+                    await command.RespondAsync("Ya hay un puzzle activo. Espera a que termine antes de aprobar otro.", ephemeral: true);
+                    return;
+                }
+
+                var nextPuzzle = _pendingPuzzles.Peek();
+                var creator = _client.GetUser(nextPuzzle.CreatorId);
+                var creatorName = creator?.Username ?? "Usuario desconocido";
+
+                var embed = new EmbedBuilder()
+                    .WithTitle("🧩 Puzzle Pendiente de Aprobación")
+                    .WithDescription("¿Aprobar este puzzle?")
+                    .WithColor(Color.Orange)
+                    .AddField("👤 Creador", creatorName, true)
+                    .AddField("✅ Respuesta Correcta", nextPuzzle.CorrectAnswer, false);
+
+                if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                {
+                    embed.AddField("📝 Texto", nextPuzzle.Text, false);
+                }
+
+                if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                {
+                    embed.AddField("🖼️ Imagen/Video", nextPuzzle.ImageUrl, false);
+                    embed.WithImageUrl(nextPuzzle.ImageUrl);
+                }
+
+                embed.AddField("⚡ Acciones", "Usa los botones para aprobar o rechazar", false);
+
+                var components = new ComponentBuilder()
+                    .WithButton("✅ Aprobar", $"puzzle_approve_{nextPuzzle.PuzzleId}", ButtonStyle.Success)
+                    .WithButton("❌ Rechazar", $"puzzle_reject_{nextPuzzle.PuzzleId}", ButtonStyle.Danger)
+                    .Build();
+
+                await command.RespondAsync(embed: embed.Build(), components: components, ephemeral: true);
+            }
+            else if (command.Data.Name == "resolver")
+            {
+                var respuestaOption = command.Data.Options.FirstOrDefault(o => o.Name == "respuesta");
+
+                if (respuestaOption == null)
+                {
+                    await command.RespondAsync("Debes proporcionar una respuesta.", ephemeral: true);
+                    return;
+                }
+
+                // Check for puzzle expiration before allowing solving
+                CheckPuzzleExpiration();
+
+                if (_activePuzzle == null)
+                {
+                    await command.RespondAsync("No hay ningún puzzle activo en este momento.", ephemeral: true);
+                    return;
+                }
+
+                var userId = command.User.Id;
+
+                // Check if user is the creator
+                if (userId == _activePuzzle.CreatorId)
+                {
+                    await command.RespondAsync("No puedes resolver tu propio puzzle.", ephemeral: true);
+                    return;
+                }
+
+                // Check if user already attempted
+                if (_activePuzzle.AttemptedUsers.Contains(userId))
+                {
+                    await command.RespondAsync("Ya has intentado resolver este puzzle.", ephemeral: true);
+                    return;
+                }
+
+                // Check if puzzle is already solved by 3 people
+                if (_activePuzzle.CorrectSolvers.Count >= 3)
+                {
+                    await command.RespondAsync("Este puzzle ya ha sido resuelto por 3 personas.", ephemeral: true);
+                    return;
+                }
+
+                _activePuzzle.AttemptedUsers.Add(userId);
+                var userAnswer = respuestaOption.Value.ToString()!.Trim();
+                var isCorrect = string.Equals(userAnswer, _activePuzzle.CorrectAnswer, StringComparison.OrdinalIgnoreCase);
+
+                if (isCorrect)
+                {
+                    _activePuzzle.CorrectSolvers.Add(userId);
+                    
+                    // Give reward
+                    LoadData();
+                    if (!_userReactionCounts.ContainsKey(userId))
+                        _userReactionCounts[userId] = 0;
+                    
+                    _userReactionCounts[userId] += _puzzleReward;
+                    SaveData();
+
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (targetChannel != null)
+                    {
+                        await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
+                    }
+
+                    await command.DeferAsync(ephemeral: true);
+
+                    // Check if puzzle is complete (3 solvers)
+                    if (_activePuzzle.CorrectSolvers.Count >= 3)
+                    {
+                        if (targetChannel != null)
+                        {
+                            var embed = new EmbedBuilder()
+                                .WithTitle("🧩 Puzzle Completado")
+                                .WithDescription("El puzzle ha sido resuelto por 3 personas!")
+                                .WithColor(Color.Green)
+                                .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
+                                .AddField("✅ Respuesta", _activePuzzle.CorrectAnswer, false)
+                                .WithTimestamp(DateTimeOffset.Now)
+                                .Build();
+
+                            await targetChannel.SendMessageAsync(embed: embed);
+                        }
+
+                        _activePuzzle = null;
+                        Console.WriteLine("[PUZZLE] Puzzle completed by 3 solvers");
+                    }
+                }
+                else
+                {
+                    await command.RespondAsync("❌ Respuesta incorrecta. Solo tienes una oportunidad por puzzle.", ephemeral: true);
+                }
+
+                SavePuzzles();
+            }
+            else if (command.Data.Name == "finalizar-puzzle")
+            {
+                // Check if user is admin
+                if (command.User.Id != _adminId)
+                {
+                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    return;
+                }
+
+                if (_activePuzzle == null)
+                {
+                    await command.RespondAsync("No hay ningún puzzle activo para finalizar.", ephemeral: true);
+                    return;
+                }
+
+                var puzzleToFinalize = _activePuzzle;
+                Console.WriteLine($"[PUZZLE] Admin force-expired puzzle: {puzzleToFinalize.PuzzleId}");
+
+                // Announce forced expiration in channel
+                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                if (targetChannel != null)
+                {
+                    var embed = new EmbedBuilder()
+                        .WithTitle("🛑 Puzzle Finalizado por Admin")
+                        .WithDescription("El puzzle activo ha sido finalizado manualmente por un administrador.")
+                        .WithColor(Color.Red)
+                        .AddField("✅ Respuesta Correcta", puzzleToFinalize.CorrectAnswer, false)
+                        .AddField("🏆 Ganadores", puzzleToFinalize.CorrectSolvers.Count > 0 ? 
+                            string.Join(", ", puzzleToFinalize.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
+                        .AddField("📊 Estadísticas", 
+                            $"• Ganadores: {puzzleToFinalize.CorrectSolvers.Count}/3\n" +
+                            $"• Intentos totales: {puzzleToFinalize.AttemptedUsers.Count}", false)
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await targetChannel.SendMessageAsync(embed: embed);
+                }
+
+                _activePuzzle = null;
+                SavePuzzles();
+
+                await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
+            }
+        }
+        
+        // Handle message-based challenge responses
+        if (interaction is SocketMessageComponent component)
+        {
+            // Handle puzzle approval buttons
+            if (component.Data.CustomId.StartsWith("puzzle_approve_") || component.Data.CustomId.StartsWith("puzzle_reject_"))
+            {
+                // Check if user is admin
+                if (component.User.Id != _adminId)
+                {
+                    await component.RespondAsync("No tienes permiso para usar este botón.", ephemeral: true);
+                    return;
+                }
+
+                var isApproval = component.Data.CustomId.StartsWith("puzzle_approve_");
+                var puzzleId = component.Data.CustomId.Split('_')[2];
+
+                // Find the puzzle in the queue
+                var puzzleFound = false;
+                var tempQueue = new Queue<Puzzle>();
+                Puzzle? targetPuzzle = null;
+
+                while (_pendingPuzzles.Count > 0)
+                {
+                    var puzzle = _pendingPuzzles.Dequeue();
+                    if (puzzle.PuzzleId == puzzleId && !puzzleFound)
+                    {
+                        targetPuzzle = puzzle;
+                        puzzleFound = true;
+                        break;
+                    }
+                    else
+                    {
+                        tempQueue.Enqueue(puzzle);
+                    }
+                }
+
+                // Restore remaining puzzles to queue
+                while (tempQueue.Count > 0)
+                {
+                    _pendingPuzzles.Enqueue(tempQueue.Dequeue());
+                }
+
+                if (!puzzleFound || targetPuzzle == null)
+                {
+                    await component.RespondAsync("❌ Puzzle no encontrado o ya procesado.", ephemeral: true);
+                    return;
+                }
+
+                if (isApproval)
+                {
+                    // Approve puzzle
+                    _activePuzzle = targetPuzzle;
+                    _activePuzzle.IsApproved = true;
+                    _activePuzzle.IsActive = true;
+                    _activePuzzle.ActivatedAt = DateTime.Now;
+                    SavePuzzles();
+
+                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                    if (targetChannel != null)
+                    {
+                        var embed = new EmbedBuilder()
+                            .WithTitle("🧩 ¡Nuevo Puzzle!")
+                            .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                            .WithColor(Color.Blue)
+                            .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                            .AddField("👥 Límite", "3 ganadores", true)
+                            .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true);
+
+                        if (!string.IsNullOrEmpty(targetPuzzle.Text))
+                        {
+                            embed.AddField("📝 Puzzle", targetPuzzle.Text, false);
+                        }
+
+                        if (!string.IsNullOrEmpty(targetPuzzle.ImageUrl))
+                        {
+                            embed.WithImageUrl(targetPuzzle.ImageUrl);
+                        }
+
+                        embed.AddField("📝 Cómo resolver", "Usa `/resolver [respuesta]` para participar", false)
+                             .WithFooter($"ID: {targetPuzzle.PuzzleId}")
+                             .WithTimestamp(DateTimeOffset.Now);
+
+                        await targetChannel.SendMessageAsync(embed: embed.Build());
+                    }
+
+                    await component.RespondAsync("✅ Puzzle aprobado y publicado!", ephemeral: true);
+                    Console.WriteLine($"[PUZZLE] Puzzle approved and activated: {targetPuzzle.PuzzleId}");
+                }
+                else
+                {
+                    // Reject puzzle
+                    SavePuzzles();
+                    await component.RespondAsync("❌ Puzzle rechazado y eliminado.", ephemeral: true);
+                    Console.WriteLine($"[PUZZLE] Puzzle rejected: {targetPuzzle.PuzzleId}");
+                }
+
+                // Disable the buttons after use
+                var disabledComponents = new ComponentBuilder()
+                    .WithButton("✅ Aprobado", $"puzzle_approved_{puzzleId}", ButtonStyle.Success, disabled: true)
+                    .WithButton("❌ Rechazado", $"puzzle_rejected_{puzzleId}", ButtonStyle.Danger, disabled: true)
+                    .Build();
+
+                await component.ModifyOriginalResponseAsync(msg => msg.Components = disabledComponents);
+            }
+        }
+    }
+
+    private async Task MessageReceived(SocketMessage message)
+    {
+        // Ignore messages from bots
+        if (message.Author.IsBot) return;
+
+        var content = message.Content.ToLower().Trim();
+        var userId = message.Author.Id;
+
+
+        // Only process messages in the target channel for other commands
+        var targetChannelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+        if (message.Channel.Id != targetChannelId) return;
+
+        // Handle challenge acceptance
+        if (content.StartsWith("acepto "))
+        {
+            var challengeId = content.Substring(7).Trim();
+            await HandleChallengeAcceptance(message, challengeId, userId);
+        }
+        // Handle challenge rejection
+        else if (content.StartsWith("rechazo "))
+        {
+            var challengeId = content.Substring(8).Trim();
+            await HandleChallengeRejection(message, challengeId, userId);
+        }
+        // Handle guessing (format: "adivino [challengeId] [answer]")
+        else if (content.StartsWith("adivino "))
+        {
+            var parts = content.Substring(8).Split(' ', 2);
+            if (parts.Length >= 2)
+            {
+                var challengeId = parts[0].Trim();
+                var answer = parts[1].Trim();
+                await HandleChallengeGuess(message, challengeId, userId, answer);
+            }
+        }
+    }
+
+    private async Task HandleChallengeAcceptance(SocketMessage message, string challengeId, ulong userId)
+    {
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await message.Channel.SendMessageAsync("Reto no encontrado o ya expirado.");
+            return;
+        }
+
+        var challenge = _activeRetarChallenges[challengeId];
+        if (userId != challenge.ChallengedId)
+        {
+            await message.Channel.SendMessageAsync("Solo el usuario retado puede aceptar este desafío.");
+            return;
+        }
+
+        if (challenge.IsAccepted)
+        {
+            await message.Channel.SendMessageAsync("Este reto ya ha sido aceptado.");
+            return;
+        }
+
+        // Verify both users still have enough credits
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(challenge.ChallengerId) || _userReactionCounts[challenge.ChallengerId] < challenge.BetAmount)
+        {
+            await message.Channel.SendMessageAsync("El retador ya no tiene suficientes créditos.");
+            _activeRetarChallenges.Remove(challengeId);
+            SaveRetarChallenges();
+            return;
+        }
+
+        if (!_userReactionCounts.ContainsKey(challenge.ChallengedId) || _userReactionCounts[challenge.ChallengedId] < challenge.BetAmount)
+        {
+            await message.Channel.SendMessageAsync("No tienes suficientes créditos para aceptar este reto.");
+            return;
+        }
+
+        // Accept the challenge and deduct credits from both users
+        _userReactionCounts[challenge.ChallengerId] -= challenge.BetAmount;
+        _userReactionCounts[challenge.ChallengedId] -= challenge.BetAmount;
+        SaveData();
+
+        challenge.IsAccepted = true;
+        SaveRetarChallenges();
+
+        try
+        {
+            // Send image for the challenge
+            var imageUploader = await SendPostRequestAsync("image");
+            challenge.ImageUrl = imageUploader; // Store the uploader info
+            SaveRetarChallenges();
+
+            var embed = new EmbedBuilder()
+                .WithTitle("🎯 ¡Reto Aceptado!")
+                .WithDescription($"<@{challenge.ChallengedId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
+                .WithColor(Color.Green)
+                .AddField("💰 Apuesta Total", $"{challenge.BetAmount * 2} créditos", true)
+                .AddField("🎮 Reglas", 
+                    "• Solo los participantes pueden adivinar\n" +
+                    "• Cada uno tiene 2 intentos\n" +
+                    "• El ganador se lleva todos los créditos\n" +
+                    "• Si ambos fallan, los créditos se pierden", false)
+                .AddField("📝 Cómo jugar", 
+                    $"Usen 'adivino {challengeId} [respuesta]' para participar", false)
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            await message.Channel.SendMessageAsync(embed: embed);
+            Console.WriteLine($"[RETAR] Challenge accepted: {challengeId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending challenge image: {ex.Message}");
+            // Refund credits if image sending fails
+            _userReactionCounts[challenge.ChallengerId] += challenge.BetAmount;
+            _userReactionCounts[challenge.ChallengedId] += challenge.BetAmount;
+            SaveData();
+            
+            _activeRetarChallenges.Remove(challengeId);
+            SaveRetarChallenges();
+            
+            await message.Channel.SendMessageAsync("Error al enviar la imagen del reto. Se han reembolsado los créditos.");
+        }
+    }
+
+    private async Task HandleChallengeRejection(SocketMessage message, string challengeId, ulong userId)
+    {
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await message.Channel.SendMessageAsync("Reto no encontrado o ya expirado.");
+            return;
+        }
+
+        var challenge = _activeRetarChallenges[challengeId];
+        if (userId != challenge.ChallengedId)
+        {
+            await message.Channel.SendMessageAsync("Solo el usuario retado puede rechazar este desafío.");
+            return;
+        }
+
+        if (challenge.IsAccepted)
+        {
+            await message.Channel.SendMessageAsync("Este reto ya ha sido aceptado y no puede ser rechazado.");
+            return;
+        }
+
+        // Remove the challenge
+        _activeRetarChallenges.Remove(challengeId);
+        SaveRetarChallenges();
+
+        await message.Channel.SendMessageAsync($"❌ <@{challenge.ChallengedId}> ha rechazado el reto de <@{challenge.ChallengerId}>.");
+        Console.WriteLine($"[RETAR] Challenge rejected: {challengeId}");
+    }
+
+    private async Task HandleChallengeGuess(SocketMessage message, string challengeId, ulong userId, string answer)
+    {
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await message.Channel.SendMessageAsync("Reto no encontrado o ya completado.");
+            return;
+        }
+
+        var challenge = _activeRetarChallenges[challengeId];
+        if (!challenge.IsAccepted)
+        {
+            await message.Channel.SendMessageAsync("Este reto aún no ha sido aceptado.");
+            return;
+        }
+
+        if (challenge.IsCompleted)
+        {
+            await message.Channel.SendMessageAsync("Este reto ya ha sido completado.");
+            return;
+        }
+
+        if (userId != challenge.ChallengerId && userId != challenge.ChallengedId)
+        {
+            await message.Channel.SendMessageAsync("Solo los participantes del reto pueden adivinar.");
+            return;
+        }
+
+        // Check attempts
+        if (!challenge.GuessAttempts.ContainsKey(userId))
+        {
+            challenge.GuessAttempts[userId] = 0;
+        }
+
+        if (challenge.GuessAttempts[userId] >= 2)
+        {
+            await message.Channel.SendMessageAsync("Ya has usado tus 2 intentos.");
+            return;
+        }
+
+        challenge.GuessAttempts[userId]++;
+        SaveRetarChallenges();
+
+        // Check if the guess is correct
+        bool isCorrect = string.Equals(answer.Trim(), challenge.ImageUrl?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        if (isCorrect)
+        {
+            // Winner found!
+            challenge.WinnerId = userId;
+            challenge.IsCompleted = true;
+
+            // Award all credits to winner
+            LoadData();
+            if (!_userReactionCounts.ContainsKey(userId))
+                _userReactionCounts[userId] = 0;
+            
+            _userReactionCounts[userId] += challenge.BetAmount * 2;
+            SaveData();
+
+            _activeRetarChallenges.Remove(challengeId);
+            SaveRetarChallenges();
+
+            var embed = new EmbedBuilder()
+                .WithTitle("🎉 ¡Tenemos un Ganador!")
+                .WithDescription($"<@{userId}> ha adivinado correctamente!")
+                .WithColor(Color.Gold)
+                .AddField("🏆 Ganador", $"<@{userId}>", true)
+                .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
+                .AddField("✅ Respuesta Correcta", answer, false)
+                .WithFooter($"Reto completado")
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            await message.Channel.SendMessageAsync(embed: embed);
+            Console.WriteLine($"[RETAR] Challenge won by {userId}: {challengeId}");
+        }
+        else
+        {
+            int remainingAttempts = 2 - challenge.GuessAttempts[userId];
+            
+            await message.Channel.SendMessageAsync($"❌ <@{userId}> ha fallado. Le quedan {remainingAttempts} intentos.");
+
+            if (remainingAttempts == 0)
+            {
+                // Check if both players have used all attempts
+                bool bothPlayersExhausted = challenge.GuessAttempts.ContainsKey(challenge.ChallengerId) && 
+                                          challenge.GuessAttempts.ContainsKey(challenge.ChallengedId) &&
+                                          challenge.GuessAttempts[challenge.ChallengerId] >= 2 &&
+                                          challenge.GuessAttempts[challenge.ChallengedId] >= 2;
+
+                if (bothPlayersExhausted)
+                {
+                    // Both failed - credits are lost
+                    challenge.IsCompleted = true;
+                    _activeRetarChallenges.Remove(challengeId);
+                    SaveRetarChallenges();
+
+                    var embed = new EmbedBuilder()
+                        .WithTitle("💸 Reto Fallido")
+                        .WithDescription("Ambos jugadores han agotado sus intentos.")
+                        .WithColor(Color.Red)
+                        .AddField("💔 Resultado", "Los créditos se han perdido", true)
+                        .AddField("✅ Respuesta Correcta", challenge.ImageUrl ?? "Desconocida", false)
+                        .WithFooter($"Reto completado")
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await message.Channel.SendMessageAsync(embed: embed);
+                    Console.WriteLine($"[RETAR] Challenge failed by both players: {challengeId}");
                 }
             }
         }
@@ -1421,7 +2660,7 @@ else if (command.Data.Name == "meme")
         if (targetChannel != null)
         {
             // Sending a message to the specific channel and tagging the user
-            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} creditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} creditos. https://c.tenor.com/4wo9yEcmBcsAAAAd/tenor.gif");
+            targetChannel.SendMessageAsync($"Redistribuidos {amountToRedistribute} créditos del usuario <@{wealthiestUserId}>. Cada usuario recibira {amountPerUser} créditos. https://c.tenor.com/4wo9yEcmBcsAAAAd/tenor.gif");
         }
         else
         {
@@ -1431,6 +2670,227 @@ else if (command.Data.Name == "meme")
         Console.WriteLine($"Redistributed {amountToRedistribute} credits from user {wealthiestUserId}. Each of the other {numberOfRecipients} users received {amountPerUser} credits.");
     }
     
+    private void ScheduleChallengeCleanup()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+                    await CleanupExpiredChallenges();
+                    await Task.Delay(TimeSpan.FromHours(1)); // Check every hour
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in challenge cleanup: {ex.Message}");
+                    await Task.Delay(TimeSpan.FromMinutes(30)); // Retry in 30 minutes on error
+                }
+            }
+        });
+        Console.WriteLine("Challenge cleanup scheduled to run every hour.");
+    }
+    
+    private async Task ButtonExecuted(SocketMessageComponent component)
+    {
+        try
+        {
+            var customId = component.Data.CustomId;
+            
+            if (customId.StartsWith("accept_challenge_"))
+            {
+                await HandleChallengeAcceptance(component);
+            }
+            else if (customId.StartsWith("reject_challenge_"))
+            {
+                await HandleChallengeRejection(component);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling button interaction: {ex.Message}");
+            await component.RespondAsync("Ocurrió un error al procesar tu respuesta.", ephemeral: true);
+        }
+    }
+
+    private async Task HandleChallengeAcceptance(SocketMessageComponent component)
+    {
+        var challengeId = component.Data.CustomId.Replace("accept_challenge_", "");
+        var userId = component.User.Id;
+        
+        LoadRetarChallenges();
+        
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await component.RespondAsync("Este reto ya no existe o ha expirado.", ephemeral: true);
+            return;
+        }
+        
+        var challenge = _activeRetarChallenges[challengeId];
+        
+        if (challenge.ChallengedId != userId)
+        {
+            await component.RespondAsync("Este reto no está dirigido a ti.", ephemeral: true);
+            return;
+        }
+        
+        if (challenge.IsAccepted || challenge.IsCompleted)
+        {
+            await component.RespondAsync("Este reto ya ha sido respondido.", ephemeral: true);
+            return;
+        }
+        
+        // Check if challenged user still has enough credits
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(userId) || _userReactionCounts[userId] < challenge.BetAmount)
+        {
+            await component.RespondAsync($"No tienes suficientes créditos para aceptar esta apuesta. Necesitas {challenge.BetAmount} créditos.", ephemeral: true);
+            return;
+        }
+        
+        // Deduct credits from both users
+        _userReactionCounts[challenge.ChallengerId] -= challenge.BetAmount;
+        _userReactionCounts[challenge.ChallengedId] -= challenge.BetAmount;
+        SaveData();
+        
+        // Mark challenge as accepted and start the game
+        challenge.IsAccepted = true;
+        challenge.AcceptedAt = DateTime.Now;
+        SaveRetarChallenges();
+        
+        // Send image for the challenge
+        await SendPostRequestAsync("image");
+        
+        var embed = new EmbedBuilder()
+            .WithTitle("✅ ¡Reto Aceptado!")
+            .WithDescription($"<@{userId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
+            .WithColor(Color.Green)
+            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
+            .AddField("🎯 Estado", "Imagen enviada - ¡Empiecen a adivinar!", true)
+            .AddField("📝 Instrucciones", "Usen `/adivino @usuario` para hacer sus intentos", false)
+            .WithTimestamp(DateTimeOffset.Now)
+            .Build();
+        
+        await component.UpdateAsync(x => 
+        {
+            x.Embed = embed;
+            x.Components = null;
+        });
+        
+        Console.WriteLine($"[RETAR] Challenge accepted: {challengeId} by user {userId}");
+    }
+    
+    private async Task HandleChallengeRejection(SocketMessageComponent component)
+    {
+        var challengeId = component.Data.CustomId.Replace("reject_challenge_", "");
+        var userId = component.User.Id;
+        
+        LoadRetarChallenges();
+        
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await component.RespondAsync("Este reto ya no existe o ha expirado.", ephemeral: true);
+            return;
+        }
+        
+        var challenge = _activeRetarChallenges[challengeId];
+        
+        if (challenge.ChallengedId != userId)
+        {
+            await component.RespondAsync("Este reto no está dirigido a ti.", ephemeral: true);
+            return;
+        }
+        
+        if (challenge.IsAccepted || challenge.IsCompleted)
+        {
+            await component.RespondAsync("Este reto ya ha sido respondido.", ephemeral: true);
+            return;
+        }
+        
+        // Mark challenge as completed (rejected)
+        challenge.IsCompleted = true;
+        challenge.CompletedAt = DateTime.Now;
+        SaveRetarChallenges();
+        
+        var embed = new EmbedBuilder()
+            .WithTitle("❌ Reto Rechazado")
+            .WithDescription($"<@{userId}> ha rechazado el reto de <@{challenge.ChallengerId}>.")
+            .WithColor(Color.Red)
+            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
+            .AddField("🎯 Estado", "Reto rechazado", true)
+            .WithTimestamp(DateTimeOffset.Now)
+            .Build();
+        
+        // Disable the buttons
+        var disabledComponent = new ComponentBuilder()
+            .WithButton("✅ Acepto", $"accept_disabled_{challengeId}", ButtonStyle.Secondary, disabled: true)
+            .WithButton("❌ Rechazado", $"reject_disabled_{challengeId}", ButtonStyle.Danger, disabled: true)
+            .Build();
+        
+        await component.UpdateAsync(x => 
+        {
+            x.Embed = embed;
+            x.Components = disabledComponent;
+        });
+        
+        Console.WriteLine($"[RETAR] Challenge rejected: {challengeId} by user {userId}");
+    }
+
+    private async Task CleanupExpiredChallenges()
+    {
+        LoadRetarChallenges();
+        var expiredChallenges = _activeRetarChallenges.Values
+            .Where(c => !c.IsAccepted && !c.IsCompleted && 
+                       DateTime.Now - c.CreatedAt > TimeSpan.FromHours(24))
+            .ToList();
+
+        foreach (var challenge in expiredChallenges)
+        {
+            try
+            {
+                // Remove buttons from expired challenge message
+                var channel = _client.GetChannel(challenge.ChannelId) as IMessageChannel;
+                if (channel != null)
+                {
+                    var message = await channel.GetMessageAsync(challenge.MessageId);
+                    if (message is IUserMessage userMessage)
+                    {
+                        var expiredEmbed = new EmbedBuilder()
+                            .WithTitle("⏰ Reto Expirado")
+                            .WithDescription($"El reto de <@{challenge.ChallengerId}> para <@{challenge.ChallengedId}> ha expirado.")
+                            .WithColor(Color.DarkGrey)
+                            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
+                            .AddField("🎯 Estado", "Expirado (24 horas)", true)
+                            .WithTimestamp(DateTimeOffset.Now)
+                            .Build();
+
+                        await userMessage.ModifyAsync(x => 
+                        {
+                            x.Embed = expiredEmbed;
+                            x.Components = null;
+                        });
+                    }
+                }
+
+                // Mark as completed and remove from active challenges
+                challenge.IsCompleted = true;
+                challenge.CompletedAt = DateTime.Now;
+                _activeRetarChallenges.Remove(challenge.ChallengeId);
+                
+                Console.WriteLine($"[RETAR] Challenge expired and cleaned up: {challenge.ChallengeId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error cleaning up expired challenge {challenge.ChallengeId}: {ex.Message}");
+            }
+        }
+
+        if (expiredChallenges.Any())
+        {
+            SaveRetarChallenges();
+        }
+    }
+
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
         var message = await cacheable.GetOrDownloadAsync();
