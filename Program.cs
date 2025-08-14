@@ -971,6 +971,52 @@ private void ScheduleDailyTask()
             var responseBody = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Response: " + responseBody);
     }
+
+    // Separate method for retar challenges that doesn't interfere with /revelar
+    public async Task<string?> SendRetarImageAsync()
+    {
+        try
+        {
+            var url = $"{_apiUrl}image";
+            Console.WriteLine($"[RETAR] Sending image request: {url}");
+
+            var jsonData = "{ \"yourField\": \"value\" }";
+            var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+            var response = await Client.PostAsync(url, content);
+            response.EnsureSuccessStatusCode();
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[RETAR] Response: {responseBody}");
+
+            // Parse JSON and extract 'uploader' for this specific challenge
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+                if (doc.RootElement.TryGetProperty("uploader", out var uploaderProp))
+                {
+                    var uploader = uploaderProp.GetString();
+                    Console.WriteLine($"[RETAR] Challenge uploader: {uploader}");
+                    return uploader;
+                }
+                else
+                {
+                    Console.WriteLine("[RETAR] No 'uploader' property found in response.");
+                    return null;
+                }
+            }
+            catch (Exception jsonEx)
+            {
+                Console.WriteLine($"[RETAR] Error parsing JSON: {jsonEx.Message}");
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RETAR] Error: {ex.Message}");
+            return null;
+        }
+    }
     
     private async Task InteractionCreated(SocketInteraction interaction)
     {
@@ -1625,8 +1671,8 @@ else if (command.Data.Name == "meme")
 
                 try
                 {
-                    // Send image for the challenge
-                    var imageUploader = await SendPostRequestAsync("image");
+                    // Send image for the challenge using separate method that doesn't affect /revelar
+                    var imageUploader = await SendRetarImageAsync();
                     challenge.ImageUrl = imageUploader; // Store the uploader info
                     SaveRetarChallenges();
 
