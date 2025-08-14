@@ -798,12 +798,12 @@ class Bot
         // Guess challenge command
         var adivinoCommand = new SlashCommandBuilder()
             .WithName("adivino")
-            .WithDescription("Adivina la respuesta de tu reto activo")
+            .WithDescription("Adivina quien compartio la imagen en tu reto activo")
             .AddOption(new SlashCommandOptionBuilder()
-                .WithName("respuesta")
-                .WithDescription("Tu respuesta para el reto")
+                .WithName("usuario")
+                .WithDescription("Usuario que crees que compartio la imagen")
                 .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.String));
+                .WithType(ApplicationCommandOptionType.User));
         
         var adivinoGuildCommand = adivinoCommand.Build();
         await _client.Rest.CreateGuildCommand(adivinoGuildCommand, _guildId);
@@ -1703,7 +1703,8 @@ else if (command.Data.Name == "meme")
             else if (command.Data.Name == "adivino")
             {
                 var userId = command.User.Id;
-                var answer = command.Data.Options.First().Value.ToString();
+                var guessedUser = (IUser)command.Data.Options.First().Value;
+                var guessedUsername = guessedUser.Username;
 
                 // Find active challenge where this user is a participant
                 var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
@@ -1738,11 +1739,10 @@ else if (command.Data.Name == "meme")
 
                 SaveRetarChallenges();
 
-                // Check answer with external API
+                // Check answer by comparing with the uploader stored in challenge.ImageUrl
                 try
                 {
-                    string checkResult = await SendPostRequestAsync($"check:{answer}");
-                    bool isCorrect = checkResult.Trim().ToLower() == "true";
+                    bool isCorrect = challenge.ImageUrl != null && challenge.ImageUrl.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
 
                     var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
                     var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
@@ -1766,7 +1766,7 @@ else if (command.Data.Name == "meme")
                                 .WithColor(Color.Green)
                                 .AddField("🏆 Ganador", $"<@{userId}>", true)
                                 .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
-                                .AddField("✅ Respuesta", answer, false)
+                                .AddField("✅ Respuesta Correcta", $"@{guessedUsername}", false)
                                 .WithFooter($"ID del reto: {challenge.ChallengeId}")
                                 .WithTimestamp(DateTimeOffset.Now)
                                 .Build();
@@ -1785,7 +1785,7 @@ else if (command.Data.Name == "meme")
 
                         if (targetChannel != null)
                         {
-                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Respuesta: '{answer}'. Le quedan {attemptsLeft} intentos.");
+                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Adivinó: @{guessedUsername}. Le quedan {attemptsLeft} intentos.");
                         }
 
                         await command.RespondAsync($"Incorrecto. Te quedan {attemptsLeft} intentos.", ephemeral: true);
@@ -1804,6 +1804,7 @@ else if (command.Data.Name == "meme")
                                     .WithColor(Color.Red)
                                     .AddField("💔 Resultado", "Nadie gana", true)
                                     .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
+                                    .AddField("✅ Respuesta Correcta", $"@{challenge.ImageUrl ?? "Desconocida"}", false)
                                     .WithFooter($"ID del reto: {challenge.ChallengeId}")
                                     .WithTimestamp(DateTimeOffset.Now)
                                     .Build();
