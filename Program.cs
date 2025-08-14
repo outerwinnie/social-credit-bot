@@ -1606,13 +1606,13 @@ else if (command.Data.Name == "meme")
         var challenge = _activeRetarChallenges[challengeId];
         if (userId != challenge.ChallengedId)
         {
-            await message.ReplyAsync("Solo el usuario retado puede aceptar este desafío.");
+            await message.Channel.SendMessageAsync("Solo el usuario retado puede aceptar este desafío.");
             return;
         }
 
         if (challenge.IsAccepted)
         {
-            await message.ReplyAsync("Este reto ya ha sido aceptado.");
+            await message.Channel.SendMessageAsync("Este reto ya ha sido aceptado.");
             return;
         }
 
@@ -1620,7 +1620,7 @@ else if (command.Data.Name == "meme")
         LoadData();
         if (!_userReactionCounts.ContainsKey(challenge.ChallengerId) || _userReactionCounts[challenge.ChallengerId] < challenge.BetAmount)
         {
-            await message.ReplyAsync("El retador ya no tiene suficientes créditos.");
+            await message.Channel.SendMessageAsync("El retador ya no tiene suficientes créditos.");
             _activeRetarChallenges.Remove(challengeId);
             SaveRetarChallenges();
             return;
@@ -1628,7 +1628,7 @@ else if (command.Data.Name == "meme")
 
         if (!_userReactionCounts.ContainsKey(challenge.ChallengedId) || _userReactionCounts[challenge.ChallengedId] < challenge.BetAmount)
         {
-            await message.ReplyAsync("No tienes suficientes créditos para aceptar este reto.");
+            await message.Channel.SendMessageAsync("No tienes suficientes créditos para aceptar este reto.");
             return;
         }
 
@@ -1677,7 +1677,7 @@ else if (command.Data.Name == "meme")
             _activeRetarChallenges.Remove(challengeId);
             SaveRetarChallenges();
             
-            await message.ReplyAsync("Error al enviar la imagen del reto. Se han reembolsado los créditos.");
+            await message.Channel.SendMessageAsync("Error al enviar la imagen del reto. Se han reembolsado los créditos.");
         }
     }
 
@@ -1692,13 +1692,13 @@ else if (command.Data.Name == "meme")
         var challenge = _activeRetarChallenges[challengeId];
         if (userId != challenge.ChallengedId)
         {
-            await message.ReplyAsync("Solo el usuario retado puede rechazar este desafío.");
+            await message.Channel.SendMessageAsync("Solo el usuario retado puede rechazar este desafío.");
             return;
         }
 
         if (challenge.IsAccepted)
         {
-            await message.ReplyAsync("Este reto ya ha sido aceptado y no puede ser rechazado.");
+            await message.Channel.SendMessageAsync("Este reto ya ha sido aceptado y no puede ser rechazado.");
             return;
         }
 
@@ -1714,26 +1714,26 @@ else if (command.Data.Name == "meme")
     {
         if (!_activeRetarChallenges.ContainsKey(challengeId))
         {
-            await message.ReplyAsync("Reto no encontrado o ya completado.");
+            await message.Channel.SendMessageAsync("Reto no encontrado o ya completado.");
             return;
         }
 
         var challenge = _activeRetarChallenges[challengeId];
         if (!challenge.IsAccepted)
         {
-            await message.ReplyAsync("Este reto aún no ha sido aceptado.");
+            await message.Channel.SendMessageAsync("Este reto aún no ha sido aceptado.");
             return;
         }
 
         if (challenge.IsCompleted)
         {
-            await message.ReplyAsync("Este reto ya ha sido completado.");
+            await message.Channel.SendMessageAsync("Este reto ya ha sido completado.");
             return;
         }
 
         if (userId != challenge.ChallengerId && userId != challenge.ChallengedId)
         {
-            await message.ReplyAsync("Solo los participantes del reto pueden adivinar.");
+            await message.Channel.SendMessageAsync("Solo los participantes del reto pueden adivinar.");
             return;
         }
 
@@ -1745,7 +1745,7 @@ else if (command.Data.Name == "meme")
 
         if (challenge.GuessAttempts[userId] >= 2)
         {
-            await message.ReplyAsync("Ya has usado tus 2 intentos.");
+            await message.Channel.SendMessageAsync("Ya has usado tus 2 intentos.");
             return;
         }
 
