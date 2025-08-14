@@ -2263,7 +2263,7 @@ else if (command.Data.Name == "meme")
                         await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
                     }
 
-                    await command.RespondAsync($"¡Correcto! Has ganado {_puzzleReward} créditos.", ephemeral: false);
+                    await command.DeferAsync(ephemeral: true);
 
                     // Check if puzzle is complete (3 solvers)
                     if (_activePuzzle.CorrectSolvers.Count >= 3)
@@ -2440,8 +2440,8 @@ else if (command.Data.Name == "meme")
 
                 // Disable the buttons after use
                 var disabledComponents = new ComponentBuilder()
-                    .WithButton("✅ Aprobado", "disabled", ButtonStyle.Success, disabled: true)
-                    .WithButton("❌ Rechazado", "disabled", ButtonStyle.Danger, disabled: true)
+                    .WithButton("✅ Aprobado", $"puzzle_approved_{puzzleId}", ButtonStyle.Success, disabled: true)
+                    .WithButton("❌ Rechazado", $"puzzle_rejected_{puzzleId}", ButtonStyle.Danger, disabled: true)
                     .Build();
 
                 await component.ModifyOriginalResponseAsync(msg => msg.Components = disabledComponents);
