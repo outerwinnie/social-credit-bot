@@ -88,6 +88,7 @@ class Bot
         public string CorrectAnswer { get; set; } = string.Empty;
         public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? ActivatedAt { get; set; }
         public bool IsApproved { get; set; } = false;
         public bool IsActive { get; set; } = false;
         public List<ulong> CorrectSolvers { get; set; } = new List<ulong>();
@@ -190,6 +191,7 @@ class Bot
         LoadVotes();
         LoadRetarChallenges();
         LoadPuzzles();
+        CheckPuzzleExpiration(); // Check for expired puzzles on startup
         _client = new DiscordSocketClient(config);
         LoadVotes();
         LoadRevelarLeaderboard();
@@ -352,6 +354,50 @@ class Bot
         public Puzzle? ActivePuzzle { get; set; }
     }
 
+    private void CheckPuzzleExpiration()
+    {
+        if (_activePuzzle != null && _activePuzzle.ActivatedAt.HasValue)
+        {
+            var timeSinceActivation = DateTime.Now - _activePuzzle.ActivatedAt.Value;
+            if (timeSinceActivation >= TimeSpan.FromHours(24))
+            {
+                Console.WriteLine($"[PUZZLE] Puzzle expired after 24 hours: {_activePuzzle.PuzzleId}");
+                
+                // Announce expiration in channel
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+                        if (targetChannel != null)
+                        {
+                            var embed = new EmbedBuilder()
+                                .WithTitle("⏰ Puzzle Expirado")
+                                .WithDescription("El puzzle activo ha expirado después de 24 horas.")
+                                .WithColor(Color.Orange)
+                                .AddField("✅ Respuesta Correcta", _activePuzzle.CorrectAnswer, false)
+                                .AddField("🏆 Ganadores", _activePuzzle.CorrectSolvers.Count > 0 ? 
+                                    string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
+                                .WithTimestamp(DateTimeOffset.Now)
+                                .Build();
+
+                            await targetChannel.SendMessageAsync(embed: embed);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error announcing puzzle expiration: {ex.Message}");
+                    }
+                });
+
+                _activePuzzle = null;
+                SavePuzzles();
+            }
+        }
+    }
+
     private void LoadVotes()
     {
         try
@@ -488,8 +534,32 @@ class Bot
         Console.WriteLine($"DAILY_TASK_TIME: {_dailyTaskTime}");
         Console.WriteLine($"DAILY_TASK_REWARD: {_dailyTaskReward}");
 
+        // Schedule periodic puzzle expiration checks
+        SchedulePuzzleExpirationCheck();
+
         // Schedule monthly leaderboard announcement
         ScheduleMonthlyLeaderboardAnnouncement();
+    }
+
+    // Schedules periodic puzzle expiration checks every 30 minutes
+    private void SchedulePuzzleExpirationCheck()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(30)); // Check every 30 minutes
+                    CheckPuzzleExpiration();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in puzzle expiration check: {ex.Message}");
+                }
+            }
+        });
+        Console.WriteLine("Puzzle expiration check scheduled to run every 30 minutes.");
     }
 
     // Schedules leaderboard announcement on the first day of each month at 00:05
@@ -2128,6 +2198,9 @@ else if (command.Data.Name == "meme")
                     return;
                 }
 
+                // Check for puzzle expiration before allowing solving
+                CheckPuzzleExpiration();
+
                 if (_activePuzzle == null)
                 {
                     await command.RespondAsync("No hay ningún puzzle activo en este momento.", ephemeral: true);
@@ -2267,6 +2340,7 @@ else if (command.Data.Name == "meme")
                     _activePuzzle = targetPuzzle;
                     _activePuzzle.IsApproved = true;
                     _activePuzzle.IsActive = true;
+                    _activePuzzle.ActivatedAt = DateTime.Now;
                     SavePuzzles();
 
                     var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
