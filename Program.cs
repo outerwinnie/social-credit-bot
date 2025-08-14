@@ -80,6 +80,8 @@ class Bot
         public int ChallengedAttempts { get; set; } = 0;
         public ulong? WinnerId { get; set; }
         public bool IsCompleted { get; set; }
+        public ulong MessageId { get; set; }
+        public ulong ChannelId { get; set; }
     }
 
     private class Puzzle
@@ -531,6 +533,9 @@ class Bot
         
         ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
         Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
+        
+        // Schedule challenge cleanup every hour
+        ScheduleChallengeCleanup();
         
         // Schedule daily task
         ScheduleDailyTask();
@@ -1866,7 +1871,12 @@ else if (command.Data.Name == "meme")
                         .WithButton(rejectButton)
                         .Build();
 
-                    await targetChannel.SendMessageAsync(embed: embed, components: buttonComponent);
+                    var message = await targetChannel.SendMessageAsync(embed: embed, components: buttonComponent);
+                    
+                    // Store message info for later button removal
+                    challenge.MessageId = message.Id;
+                    challenge.ChannelId = channelId;
+                    SaveRetarChallenges();
                 }
 
                 await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
@@ -2660,6 +2670,27 @@ else if (command.Data.Name == "meme")
         Console.WriteLine($"Redistributed {amountToRedistribute} credits from user {wealthiestUserId}. Each of the other {numberOfRecipients} users received {amountPerUser} credits.");
     }
     
+    private void ScheduleChallengeCleanup()
+    {
+        Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+                    await CleanupExpiredChallenges();
+                    await Task.Delay(TimeSpan.FromHours(1)); // Check every hour
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in challenge cleanup: {ex.Message}");
+                    await Task.Delay(TimeSpan.FromMinutes(30)); // Retry in 30 minutes on error
+                }
+            }
+        });
+        Console.WriteLine("Challenge cleanup scheduled to run every hour.");
+    }
+    
     private async Task ButtonExecuted(SocketMessageComponent component)
     {
         try
@@ -2803,6 +2834,61 @@ else if (command.Data.Name == "meme")
         });
         
         Console.WriteLine($"[RETAR] Challenge rejected: {challengeId} by user {userId}");
+    }
+
+    private async Task CleanupExpiredChallenges()
+    {
+        LoadRetarChallenges();
+        var expiredChallenges = _activeRetarChallenges.Values
+            .Where(c => !c.IsAccepted && !c.IsCompleted && 
+                       DateTime.Now - c.CreatedAt > TimeSpan.FromHours(24))
+            .ToList();
+
+        foreach (var challenge in expiredChallenges)
+        {
+            try
+            {
+                // Remove buttons from expired challenge message
+                var channel = _client.GetChannel(challenge.ChannelId) as IMessageChannel;
+                if (channel != null)
+                {
+                    var message = await channel.GetMessageAsync(challenge.MessageId);
+                    if (message is IUserMessage userMessage)
+                    {
+                        var expiredEmbed = new EmbedBuilder()
+                            .WithTitle("⏰ Reto Expirado")
+                            .WithDescription($"El reto de <@{challenge.ChallengerId}> para <@{challenge.ChallengedId}> ha expirado.")
+                            .WithColor(Color.DarkGrey)
+                            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
+                            .AddField("🎯 Estado", "Expirado (24 horas)", true)
+                            .WithTimestamp(DateTimeOffset.Now)
+                            .Build();
+
+                        await userMessage.ModifyAsync(x => 
+                        {
+                            x.Embed = expiredEmbed;
+                            x.Components = null;
+                        });
+                    }
+                }
+
+                // Mark as completed and remove from active challenges
+                challenge.IsCompleted = true;
+                challenge.CompletedAt = DateTime.Now;
+                _activeRetarChallenges.Remove(challenge.ChallengeId);
+                
+                Console.WriteLine($"[RETAR] Challenge expired and cleaned up: {challenge.ChallengeId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error cleaning up expired challenge {challenge.ChallengeId}: {ex.Message}");
+            }
+        }
+
+        if (expiredChallenges.Any())
+        {
+            SaveRetarChallenges();
+        }
     }
 
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
