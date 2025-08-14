@@ -2740,16 +2740,10 @@ else if (command.Data.Name == "meme")
             .WithTimestamp(DateTimeOffset.Now)
             .Build();
         
-        // Disable the buttons
-        var disabledComponent = new ComponentBuilder()
-            .WithButton("✅ Aceptado", $"accepted_{challengeId}", ButtonStyle.Success, disabled: true)
-            .WithButton("❌ Rechazo", $"rejected_{challengeId}", ButtonStyle.Secondary, disabled: true)
-            .Build();
-        
         await component.UpdateAsync(x => 
         {
             x.Embed = embed;
-            x.Components = disabledComponent;
+            x.Components = null;
         });
         
         Console.WriteLine($"[RETAR] Challenge accepted: {challengeId} by user {userId}");
