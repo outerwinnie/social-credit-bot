@@ -503,6 +503,7 @@ class Bot
         _client.ReactionAdded += ReactionAddedAsync;
         _client.Ready += ReadyAsync;
         _client.InteractionCreated += InteractionCreated;
+        _client.ButtonExecuted += ButtonExecuted;
         _client.MessageReceived += MessageReceived;
 
         var token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN");
@@ -945,23 +946,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(retarGuildCommand, _guildId);
         Console.WriteLine("Slash command 'retar' registered for the guild.");
 
-        // Accept challenge command
-        var aceptoCommand = new SlashCommandBuilder()
-            .WithName("acepto")
-            .WithDescription("Acepta el reto pendiente dirigido a ti");
-        
-        var aceptoGuildCommand = aceptoCommand.Build();
-        await _client.Rest.CreateGuildCommand(aceptoGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'acepto' registered for the guild.");
-
-        // Reject challenge command
-        var rechazoCommand = new SlashCommandBuilder()
-            .WithName("rechazo")
-            .WithDescription("Rechaza el reto pendiente dirigido a ti");
-        
-        var rechazoGuildCommand = rechazoCommand.Build();
-        await _client.Rest.CreateGuildCommand(rechazoGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'rechazo' registered for the guild.");
 
         // Guess challenge command
         var adivinoCommand = new SlashCommandBuilder()
@@ -1848,7 +1832,7 @@ else if (command.Data.Name == "meme")
                 _activeRetarChallenges[challengeId] = challenge;
                 SaveRetarChallenges();
 
-                // Send challenge message to target channel
+                // Send challenge message to target channel with buttons
                 var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
                 var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
 
@@ -1861,131 +1845,30 @@ else if (command.Data.Name == "meme")
                         .AddField("💰 Apuesta", $"{betAmount} créditos", true)
                         .AddField("⏰ Expira en", "24 horas", true)
                         .AddField("📝 Instrucciones", 
-                            $"<@{challengedId}> puede usar `/acepto` o `/rechazo` para responder", false)
+                            $"<@{challengedId}> puede usar los botones de abajo para responder", false)
                         .WithTimestamp(DateTimeOffset.Now)
                         .Build();
 
-                    await targetChannel.SendMessageAsync(embed: embed);
+                    var acceptButton = new ButtonBuilder()
+                        .WithLabel("✅ Acepto")
+                        .WithStyle(ButtonStyle.Success)
+                        .WithCustomId($"accept_challenge_{challengeId}");
+
+                    var rejectButton = new ButtonBuilder()
+                        .WithLabel("❌ Rechazo")
+                        .WithStyle(ButtonStyle.Danger)
+                        .WithCustomId($"reject_challenge_{challengeId}");
+
+                    var component = new ComponentBuilder()
+                        .WithButton(acceptButton)
+                        .WithButton(rejectButton)
+                        .Build();
+
+                    await targetChannel.SendMessageAsync(embed: embed, components: component);
                 }
 
                 await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
                 Console.WriteLine($"[RETAR] Challenge created: {challengerId} -> {challengedId} for {betAmount} credits");
-            }
-            else if (command.Data.Name == "acepto")
-            {
-                var userId = command.User.Id;
-                
-                // Find active challenge where this user is the challenged party
-                var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    c.ChallengedId == userId && !c.IsAccepted && !c.IsCompleted);
-
-                if (challenge == null)
-                {
-                    await command.RespondAsync("No tienes ningún reto pendiente para aceptar.", ephemeral: true);
-                    return;
-                }
-
-                // Verify both users still have enough credits
-                LoadData();
-                if (!_userReactionCounts.ContainsKey(challenge.ChallengerId) || _userReactionCounts[challenge.ChallengerId] < challenge.BetAmount)
-                {
-                    await command.RespondAsync("El retador ya no tiene suficientes créditos.", ephemeral: true);
-                    _activeRetarChallenges.Remove(challenge.ChallengeId);
-                    SaveRetarChallenges();
-                    return;
-                }
-
-                if (!_userReactionCounts.ContainsKey(challenge.ChallengedId) || _userReactionCounts[challenge.ChallengedId] < challenge.BetAmount)
-                {
-                    await command.RespondAsync("No tienes suficientes créditos para aceptar este reto.", ephemeral: true);
-                    return;
-                }
-
-                // Accept the challenge and deduct credits from both users
-                _userReactionCounts[challenge.ChallengerId] -= challenge.BetAmount;
-                _userReactionCounts[challenge.ChallengedId] -= challenge.BetAmount;
-                SaveData();
-
-                challenge.IsAccepted = true;
-                SaveRetarChallenges();
-
-                await command.DeferAsync();
-
-                try
-                {
-                    // Send image for the challenge using separate method that doesn't affect /revelar
-                    var imageUploader = await SendRetarImageAsync();
-                    challenge.ImageUrl = imageUploader; // Store the uploader info
-                    SaveRetarChallenges();
-
-                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                    if (targetChannel != null)
-                    {
-                        var embed = new EmbedBuilder()
-                            .WithTitle("🎯 ¡Reto Aceptado!")
-                            .WithDescription($"<@{challenge.ChallengedId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
-                            .WithColor(Color.Green)
-                            .AddField("💰 Apuesta Total", $"{challenge.BetAmount * 2} créditos", true)
-                            .AddField("🎮 Reglas", 
-                                "• Solo los participantes pueden adivinar\n" +
-                                "• Cada uno tiene 2 intentos\n" +
-                                "• El ganador se lleva todos los créditos\n" +
-                                "• Si ambos fallan, los créditos se pierden", false)
-                            .AddField("📝 Cómo jugar", 
-                                "Usen `/adivino [respuesta]` para participar", false)
-                            .WithTimestamp(DateTimeOffset.Now)
-                            .Build();
-
-                        await targetChannel.SendMessageAsync(embed: embed);
-                    }
-
-                    await command.FollowupAsync("¡Reto aceptado! Se ha enviado una imagen al canal. ¡Que comience el reto!", ephemeral: true);
-                    Console.WriteLine($"[RETAR] Challenge accepted: {challenge.ChallengeId}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error sending challenge image: {ex.Message}");
-                    // Refund credits if image sending fails
-                    _userReactionCounts[challenge.ChallengerId] += challenge.BetAmount;
-                    _userReactionCounts[challenge.ChallengedId] += challenge.BetAmount;
-                    SaveData();
-                    
-                    _activeRetarChallenges.Remove(challenge.ChallengeId);
-                    SaveRetarChallenges();
-                    
-                    await command.FollowupAsync("Error al enviar la imagen del reto. Se han reembolsado los créditos.", ephemeral: true);
-                }
-            }
-            else if (command.Data.Name == "rechazo")
-            {
-                var userId = command.User.Id;
-                
-                // Find active challenge where this user is the challenged party
-                var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    c.ChallengedId == userId && !c.IsAccepted && !c.IsCompleted);
-
-                if (challenge == null)
-                {
-                    await command.RespondAsync("No tienes ningún reto pendiente para rechazar.", ephemeral: true);
-                    return;
-                }
-
-                // Remove the challenge
-                _activeRetarChallenges.Remove(challenge.ChallengeId);
-                SaveRetarChallenges();
-
-                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                if (targetChannel != null)
-                {
-                    await targetChannel.SendMessageAsync($"❌ <@{challenge.ChallengedId}> ha rechazado el reto de <@{challenge.ChallengerId}>.");
-                }
-
-                await command.RespondAsync("Has rechazado el reto.", ephemeral: true);
-                Console.WriteLine($"[RETAR] Challenge rejected: {challenge.ChallengeId}");
             }
             else if (command.Data.Name == "adivino")
             {
@@ -2775,6 +2658,157 @@ else if (command.Data.Name == "meme")
         Console.WriteLine($"Redistributed {amountToRedistribute} credits from user {wealthiestUserId}. Each of the other {numberOfRecipients} users received {amountPerUser} credits.");
     }
     
+    private async Task ButtonExecuted(SocketMessageComponent component)
+    {
+        try
+        {
+            var customId = component.Data.CustomId;
+            
+            if (customId.StartsWith("accept_challenge_"))
+            {
+                await HandleChallengeAcceptance(component);
+            }
+            else if (customId.StartsWith("reject_challenge_"))
+            {
+                await HandleChallengeRejection(component);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling button interaction: {ex.Message}");
+            await component.RespondAsync("Ocurrió un error al procesar tu respuesta.", ephemeral: true);
+        }
+    }
+
+    private async Task HandleChallengeAcceptance(SocketMessageComponent component)
+    {
+        var challengeId = component.Data.CustomId.Replace("accept_challenge_", "");
+        var userId = component.User.Id;
+        
+        LoadRetarChallenges();
+        
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await component.RespondAsync("Este reto ya no existe o ha expirado.", ephemeral: true);
+            return;
+        }
+        
+        var challenge = _activeRetarChallenges[challengeId];
+        
+        if (challenge.ChallengedId != userId)
+        {
+            await component.RespondAsync("Este reto no está dirigido a ti.", ephemeral: true);
+            return;
+        }
+        
+        if (challenge.IsAccepted || challenge.IsCompleted)
+        {
+            await component.RespondAsync("Este reto ya ha sido respondido.", ephemeral: true);
+            return;
+        }
+        
+        // Check if challenged user still has enough credits
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(userId) || _userReactionCounts[userId] < challenge.BetAmount)
+        {
+            await component.RespondAsync($"No tienes suficientes créditos para aceptar esta apuesta. Necesitas {challenge.BetAmount} créditos.", ephemeral: true);
+            return;
+        }
+        
+        // Deduct credits from both users
+        _userReactionCounts[challenge.ChallengerId] -= challenge.BetAmount;
+        _userReactionCounts[challenge.ChallengedId] -= challenge.BetAmount;
+        SaveData();
+        
+        // Mark challenge as accepted and start the game
+        challenge.IsAccepted = true;
+        challenge.AcceptedAt = DateTime.Now;
+        SaveRetarChallenges();
+        
+        // Send image for the challenge
+        await SendPostRequestAsync("image");
+        
+        var embed = new EmbedBuilder()
+            .WithTitle("✅ ¡Reto Aceptado!")
+            .WithDescription($"<@{userId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
+            .WithColor(Color.Green)
+            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
+            .AddField("🎯 Estado", "Imagen enviada - ¡Empiecen a adivinar!", true)
+            .AddField("📝 Instrucciones", "Usen `/adivino @usuario` para hacer sus intentos", false)
+            .WithTimestamp(DateTimeOffset.Now)
+            .Build();
+        
+        // Disable the buttons
+        var disabledComponent = new ComponentBuilder()
+            .WithButton("✅ Aceptado", "disabled", ButtonStyle.Success, disabled: true)
+            .WithButton("❌ Rechazo", "disabled", ButtonStyle.Secondary, disabled: true)
+            .Build();
+        
+        await component.UpdateAsync(x => 
+        {
+            x.Embed = embed;
+            x.Components = disabledComponent;
+        });
+        
+        Console.WriteLine($"[RETAR] Challenge accepted: {challengeId} by user {userId}");
+    }
+    
+    private async Task HandleChallengeRejection(SocketMessageComponent component)
+    {
+        var challengeId = component.Data.CustomId.Replace("reject_challenge_", "");
+        var userId = component.User.Id;
+        
+        LoadRetarChallenges();
+        
+        if (!_activeRetarChallenges.ContainsKey(challengeId))
+        {
+            await component.RespondAsync("Este reto ya no existe o ha expirado.", ephemeral: true);
+            return;
+        }
+        
+        var challenge = _activeRetarChallenges[challengeId];
+        
+        if (challenge.ChallengedId != userId)
+        {
+            await component.RespondAsync("Este reto no está dirigido a ti.", ephemeral: true);
+            return;
+        }
+        
+        if (challenge.IsAccepted || challenge.IsCompleted)
+        {
+            await component.RespondAsync("Este reto ya ha sido respondido.", ephemeral: true);
+            return;
+        }
+        
+        // Mark challenge as completed (rejected)
+        challenge.IsCompleted = true;
+        challenge.CompletedAt = DateTime.Now;
+        SaveRetarChallenges();
+        
+        var embed = new EmbedBuilder()
+            .WithTitle("❌ Reto Rechazado")
+            .WithDescription($"<@{userId}> ha rechazado el reto de <@{challenge.ChallengerId}>.")
+            .WithColor(Color.Red)
+            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
+            .AddField("🎯 Estado", "Reto rechazado", true)
+            .WithTimestamp(DateTimeOffset.Now)
+            .Build();
+        
+        // Disable the buttons
+        var disabledComponent = new ComponentBuilder()
+            .WithButton("✅ Acepto", "disabled", ButtonStyle.Secondary, disabled: true)
+            .WithButton("❌ Rechazado", "disabled", ButtonStyle.Danger, disabled: true)
+            .Build();
+        
+        await component.UpdateAsync(x => 
+        {
+            x.Embed = embed;
+            x.Components = disabledComponent;
+        });
+        
+        Console.WriteLine($"[RETAR] Challenge rejected: {challengeId} by user {userId}");
+    }
+
     private async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> cacheable, Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
     {
         var message = await cacheable.GetOrDownloadAsync();
