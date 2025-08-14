@@ -792,6 +792,20 @@ class Bot
         var rechazoGuildCommand = rechazoCommand.Build();
         await _client.Rest.CreateGuildCommand(rechazoGuildCommand, _guildId);
         Console.WriteLine("Slash command 'rechazo' registered for the guild.");
+
+        // Guess challenge command
+        var adivinoCommand = new SlashCommandBuilder()
+            .WithName("adivino")
+            .WithDescription("Adivina la respuesta de tu reto activo")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("respuesta")
+                .WithDescription("Tu respuesta para el reto")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String));
+        
+        var adivinoGuildCommand = adivinoCommand.Build();
+        await _client.Rest.CreateGuildCommand(adivinoGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'adivino' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
