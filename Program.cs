@@ -1994,7 +1994,7 @@ else if (command.Data.Name == "meme")
 
                         if (targetChannel != null)
                         {
-                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Adivinó: @{guessedUsername}. Le quedan {attemptsLeft} intentos.");
+                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Le quedan {attemptsLeft} intentos.");
                         }
 
                         await command.RespondAsync($"Incorrecto. Te quedan {attemptsLeft} intentos.", ephemeral: true);
