@@ -1599,7 +1599,7 @@ else if (command.Data.Name == "meme")
     {
         if (!_activeRetarChallenges.ContainsKey(challengeId))
         {
-            await message.ReplyAsync("Reto no encontrado o ya expirado.");
+            await message.Channel.SendMessageAsync("Reto no encontrado o ya expirado.");
             return;
         }
 
@@ -1685,7 +1685,7 @@ else if (command.Data.Name == "meme")
     {
         if (!_activeRetarChallenges.ContainsKey(challengeId))
         {
-            await message.ReplyAsync("Reto no encontrado o ya expirado.");
+            await message.Channel.SendMessageAsync("Reto no encontrado o ya expirado.");
             return;
         }
 
