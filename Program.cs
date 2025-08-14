@@ -789,6 +789,18 @@ class Bot
 
     private async Task RegisterSlashCommands()
     {
+        // Clear existing guild commands before registering new ones
+        try
+        {
+            Console.WriteLine("Clearing existing guild slash commands...");
+            await _client.Rest.BulkOverwriteGuildCommands(new ApplicationCommandProperties[0], _guildId);
+            Console.WriteLine("Existing guild slash commands cleared successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error clearing existing slash commands: {ex.Message}");
+        }
+
         var redeemRecuerdateCommand = new SlashCommandBuilder()
             .WithName("recuerdate")
             .WithDescription($"Canjea una recompensa 'Recuerdate' ({_recuerdatePrice})")
