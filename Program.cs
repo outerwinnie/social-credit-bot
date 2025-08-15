@@ -2179,7 +2179,7 @@ else if (command.Data.Name == "meme")
                 }
                 else
                 {
-                    await command.RespondAsync("❌ Respuesta incorrecta. Solo tienes una oportunidad por puzzle.", ephemeral: true);
+                    await command.RespondAsync($"❌ <@{userId}> Respuesta incorrecta.", ephemeral: false);
                 }
 
                 SavePuzzles();
