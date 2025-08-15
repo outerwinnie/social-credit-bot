@@ -98,7 +98,8 @@ class Bot
         public List<ulong> CorrectSolvers { get; set; } = new List<ulong>();
         public HashSet<ulong> AttemptedUsers { get; set; } = new HashSet<ulong>();
         
-        // Legacy property for backward compatibility
+        // Legacy property for backward compatibility - excluded from JSON serialization
+        [System.Text.Json.Serialization.JsonIgnore]
         public string CorrectAnswer 
         { 
             get => CorrectAnswers.FirstOrDefault() ?? string.Empty;
