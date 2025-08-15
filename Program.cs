@@ -377,17 +377,30 @@ class Bot
 
                         if (targetChannel != null)
                         {
-                            var embed = new EmbedBuilder()
-                                .WithTitle("⏰ Puzzle Expirado")
-                                .WithDescription("El puzzle activo ha expirado después de 24 horas.")
-                                .WithColor(Color.Orange)
-                                .AddField("✅ Respuesta Correcta", _activePuzzle.CorrectAnswer, false)
-                                .AddField("🏆 Ganadores", _activePuzzle.CorrectSolvers.Count > 0 ? 
-                                    string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
-                                .WithTimestamp(DateTimeOffset.Now)
-                                .Build();
+                            var embed = new EmbedBuilder();
+                            
+                            if (_activePuzzle.CorrectSolvers.Count > 0)
+                            {
+                                // At least one person solved it - show as completed
+                                embed.WithTitle("🧩 Puzzle Completado")
+                                    .WithDescription("El puzzle ha expirado después de 24 horas, pero fue resuelto correctamente!")
+                                    .WithColor(Color.Green)
+                                    .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
+                                    .AddField("✅ Respuesta", _activePuzzle.CorrectAnswer, false);
+                            }
+                            else
+                            {
+                                // No one solved it - show as expired
+                                embed.WithTitle("⏰ Puzzle Expirado")
+                                    .WithDescription("El puzzle activo ha expirado después de 24 horas.")
+                                    .WithColor(Color.Orange)
+                                    .AddField("✅ Respuesta Correcta", _activePuzzle.CorrectAnswer, false)
+                                    .AddField("🏆 Ganadores", "Ninguno", false);
+                            }
+                            
+                            embed.WithTimestamp(DateTimeOffset.Now);
 
-                            await targetChannel.SendMessageAsync(embed: embed);
+                            await targetChannel.SendMessageAsync(embed: embed.Build());
                         }
                     }
                     catch (Exception ex)
