@@ -2182,7 +2182,7 @@ else if (command.Data.Name == "meme")
                         await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
                     }
 
-                    await command.DeferAsync(ephemeral: true);
+                    await command.RespondAsync($"🎉 ¡Correcto! Has ganado {_puzzleReward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)", ephemeral: true);
 
                     // Check if puzzle is complete (3 solvers)
                     if (_activePuzzle.CorrectSolvers.Count >= 3)
