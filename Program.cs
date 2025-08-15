@@ -89,7 +89,7 @@ class Bot
         public string PuzzleId { get; set; } = string.Empty;
         public ulong CreatorId { get; set; }
         public string? Text { get; set; }
-        public string CorrectAnswer { get; set; } = string.Empty;
+        public List<string> CorrectAnswers { get; set; } = new List<string>();
         public string? ImageUrl { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? ActivatedAt { get; set; }
@@ -97,6 +97,13 @@ class Bot
         public bool IsActive { get; set; } = false;
         public List<ulong> CorrectSolvers { get; set; } = new List<ulong>();
         public HashSet<ulong> AttemptedUsers { get; set; } = new HashSet<ulong>();
+        
+        // Legacy property for backward compatibility
+        public string CorrectAnswer 
+        { 
+            get => CorrectAnswers.FirstOrDefault() ?? string.Empty;
+            set => CorrectAnswers = new List<string> { value };
+        }
     }
 
     private void SaveQuizState()
@@ -386,7 +393,7 @@ class Bot
                                     .WithDescription("El puzzle ha expirado después de 24 horas, pero fue resuelto correctamente!")
                                     .WithColor(Color.Green)
                                     .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
-                                    .AddField("✅ Respuesta", _activePuzzle.CorrectAnswer, false);
+                                    .AddField("✅ Respuesta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false);
                             }
                             else
                             {
@@ -394,7 +401,7 @@ class Bot
                                 embed.WithTitle("⏰ Puzzle Expirado")
                                     .WithDescription("El puzzle activo ha expirado después de 24 horas.")
                                     .WithColor(Color.Orange)
-                                    .AddField("✅ Respuesta Correcta", _activePuzzle.CorrectAnswer, false)
+                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
                                     .AddField("🏆 Ganadores", "Ninguno", false);
                             }
                             
@@ -2033,11 +2040,17 @@ else if (command.Data.Name == "meme")
                     imageUrl = attachment.Url;
                 }
 
+                var answerText = respuestaOption.Value.ToString()!.Trim();
+                var answers = answerText.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(a => a.Trim())
+                    .Where(a => !string.IsNullOrEmpty(a))
+                    .ToList();
+                
                 var puzzle = new Puzzle
                 {
                     PuzzleId = Guid.NewGuid().ToString(),
                     CreatorId = command.User.Id,
-                    CorrectAnswer = respuestaOption.Value.ToString()!.Trim(),
+                    CorrectAnswers = answers,
                     Text = textoOption?.Value?.ToString(),
                     ImageUrl = imageUrl,
                     CreatedAt = DateTime.Now
@@ -2079,7 +2092,7 @@ else if (command.Data.Name == "meme")
                     .WithDescription("¿Aprobar este puzzle?")
                     .WithColor(Color.Orange)
                     .AddField("👤 Creador", creatorName, true)
-                    .AddField("✅ Respuesta Correcta", nextPuzzle.CorrectAnswer, false);
+                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", nextPuzzle.CorrectAnswers), false);
 
                 if (!string.IsNullOrEmpty(nextPuzzle.Text))
                 {
@@ -2145,7 +2158,8 @@ else if (command.Data.Name == "meme")
 
                 _activePuzzle.AttemptedUsers.Add(userId);
                 var userAnswer = respuestaOption.Value.ToString()!.Trim();
-                var isCorrect = string.Equals(userAnswer, _activePuzzle.CorrectAnswer, StringComparison.OrdinalIgnoreCase);
+                var isCorrect = _activePuzzle.CorrectAnswers.Any(answer => 
+                    string.Equals(userAnswer, answer, StringComparison.OrdinalIgnoreCase));
 
                 if (isCorrect)
                 {
@@ -2179,7 +2193,7 @@ else if (command.Data.Name == "meme")
                                 .WithDescription("El puzzle ha sido resuelto por 3 personas!")
                                 .WithColor(Color.Green)
                                 .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
-                                .AddField("✅ Respuesta", _activePuzzle.CorrectAnswer, false)
+                                .AddField("✅ Respuesta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
                                 .WithTimestamp(DateTimeOffset.Now)
                                 .Build();
 
@@ -2225,7 +2239,7 @@ else if (command.Data.Name == "meme")
                         .WithTitle("🛑 Puzzle Finalizado por Admin")
                         .WithDescription("El puzzle activo ha sido finalizado manualmente por un administrador.")
                         .WithColor(Color.Red)
-                        .AddField("✅ Respuesta Correcta", puzzleToFinalize.CorrectAnswer, false)
+                        .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", puzzleToFinalize.CorrectAnswers), false)
                         .AddField("🏆 Ganadores", puzzleToFinalize.CorrectSolvers.Count > 0 ? 
                             string.Join(", ", puzzleToFinalize.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
                         .AddField("📊 Estadísticas", 
