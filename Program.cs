@@ -2007,7 +2007,7 @@ else if (command.Data.Name == "meme")
                                     .WithColor(Color.Red)
                                     .AddField("💔 Resultado", "Nadie gana", true)
                                     .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
-                                    .AddField("✅ Respuesta Correcta", $"@{challenge.ImageUrl ?? "Desconocida"}", false)
+                                    .AddField("✅ Respuesta Correcta", $"@{challenge.CorrectAnswer ?? "Desconocida"}", false)
                                     .WithTimestamp(DateTimeOffset.Now)
                                     .Build();
 
