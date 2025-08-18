@@ -2566,7 +2566,7 @@ else if (command.Data.Name == "meme")
                 .WithTitle($"🔄 Ronda {challenge.CurrentRound}")
                 .WithDescription($"{reason}. ¡Nueva ronda!")
                 .WithColor(Color.Blue)
-                .AddField("💰 Apuesta Actual", $"{challenge.CurrentBetAmount * 2} créditos", true)
+                .AddField("💰 Apuesta Actual", $"{challenge.CurrentBetAmount * 2 * _retarRoundMultiplier} créditos", true)
                 .AddField("📈 Multiplicador", $"x{_retarRoundMultiplier}", true)
                 .AddField("📝 Instrucciones", 
                     $"Ambos jugadores deben usar 'adivino {challengeId} [respuesta]' nuevamente", false)
