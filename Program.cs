@@ -2677,7 +2677,7 @@ else if (command.Data.Name == "meme")
                 .AddField("💰 Apuesta Actual", $"{challenge.CurrentBetAmount * 2} créditos", true)
                 .AddField("📈 Multiplicador", $"x{_retarRoundMultiplier}", true)
                 .AddField("📝 Instrucciones", 
-                    $"Ambos jugadores deben usar '/adivino [usuario]' nuevamente", false)
+                    $"Ambos jugadores deben usar `/adivino [usuario]` nuevamente", false)
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
