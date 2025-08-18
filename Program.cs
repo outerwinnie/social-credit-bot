@@ -2555,7 +2555,8 @@ else if (command.Data.Name == "meme")
     private async Task StartNextRound(SocketMessage message, RetarChallenge challenge, string challengeId, string reason)
     {
         challenge.CurrentRound++;
-        challenge.CurrentBetAmount = (int)(challenge.BetAmount * (1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1))));
+        var roundMultiplier = 1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1));
+        challenge.CurrentBetAmount = (int)Math.Round(challenge.BetAmount * roundMultiplier);
         
         try
         {
@@ -2663,7 +2664,8 @@ else if (command.Data.Name == "meme")
     private async Task StartNextRoundFromSlashCommand(IMessageChannel channel, RetarChallenge challenge, string challengeId, string reason)
     {
         challenge.CurrentRound++;
-        challenge.CurrentBetAmount = (int)(challenge.BetAmount * (1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1))));
+        var roundMultiplier = 1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1));
+        challenge.CurrentBetAmount = (int)Math.Round(challenge.BetAmount * roundMultiplier);
         
         try
         {
