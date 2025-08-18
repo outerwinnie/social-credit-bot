@@ -1911,10 +1911,12 @@ else if (command.Data.Name == "meme")
                 var guessedUser = (IUser)command.Data.Options.First().Value;
                 var guessedUsername = guessedUser.Username;
 
-                // Find active challenge where this user is a participant
-                var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    (c.ChallengerId == userId || c.ChallengedId == userId) && 
-                    c.IsAccepted && !c.IsCompleted);
+                // Find most recent active challenge where this user is a participant
+                var challenge = _activeRetarChallenges.Values
+                    .Where(c => (c.ChallengerId == userId || c.ChallengedId == userId) && 
+                               c.IsAccepted && !c.IsCompleted)
+                    .OrderByDescending(c => c.AcceptedAt)
+                    .FirstOrDefault();
 
                 if (challenge == null)
                 {
@@ -2566,8 +2568,8 @@ else if (command.Data.Name == "meme")
                 .WithTitle($"🔄 Ronda {challenge.CurrentRound}")
                 .WithDescription($"{reason}. ¡Nueva ronda!")
                 .WithColor(Color.Blue)
-                .AddField("💰 Apuesta Actual", $"{challenge.CurrentBetAmount * 2 * _retarRoundMultiplier} créditos", true)
-                .AddField("📈 Multiplicador", $"x{_retarRoundMultiplier}", true)
+                .AddField("💰 Apuesta Actual", $"{challenge.CurrentBetAmount * 2} créditos", true)
+                .AddField("📈 Multiplicador", $"x{1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1)):F2}", true)
                 .AddField("📝 Instrucciones", 
                     $"Ambos jugadores deben usar 'adivino {challengeId} [respuesta]' nuevamente", false)
                 .WithTimestamp(DateTimeOffset.Now)
@@ -2675,7 +2677,7 @@ else if (command.Data.Name == "meme")
                 .WithDescription($"{reason}. ¡Nueva ronda!")
                 .WithColor(Color.Blue)
                 .AddField("💰 Apuesta Actual", $"{challenge.CurrentBetAmount * 2} créditos", true)
-                .AddField("📈 Multiplicador", $"x{_retarRoundMultiplier}", true)
+                .AddField("📈 Multiplicador", $"x{1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1)):F2}", true)
                 .AddField("📝 Instrucciones", 
                     $"Ambos jugadores deben usar `/adivino [usuario]` nuevamente", false)
                 .WithTimestamp(DateTimeOffset.Now)
@@ -2945,9 +2947,10 @@ else if (command.Data.Name == "meme")
             return;
         }
         
-        // Mark challenge as completed (rejected)
+        // Mark challenge as completed (rejected) and remove from active challenges
         challenge.IsCompleted = true;
         challenge.CompletedAt = DateTime.Now;
+        _activeRetarChallenges.Remove(challengeId);
         SaveRetarChallenges();
         
         var embed = new EmbedBuilder()
@@ -2977,9 +2980,16 @@ else if (command.Data.Name == "meme")
     private async Task CleanupExpiredChallenges()
     {
         LoadRetarChallenges();
+        
+        // Clean up unaccepted expired challenges
         var expiredChallenges = _activeRetarChallenges.Values
             .Where(c => !c.IsAccepted && !c.IsCompleted && 
                        DateTime.Now - c.CreatedAt > TimeSpan.FromHours(24))
+            .ToList();
+            
+        // Clean up completed challenges
+        var completedChallenges = _activeRetarChallenges.Values
+            .Where(c => c.IsCompleted)
             .ToList();
 
         foreach (var challenge in expiredChallenges)
@@ -3022,8 +3032,15 @@ else if (command.Data.Name == "meme")
                 Console.WriteLine($"Error cleaning up expired challenge {challenge.ChallengeId}: {ex.Message}");
             }
         }
+        
+        // Clean up completed challenges
+        foreach (var challenge in completedChallenges)
+        {
+            _activeRetarChallenges.Remove(challenge.ChallengeId);
+            Console.WriteLine($"[RETAR] Completed challenge cleaned up: {challenge.ChallengeId}");
+        }
 
-        if (expiredChallenges.Any())
+        if (expiredChallenges.Any() || completedChallenges.Any())
         {
             SaveRetarChallenges();
         }
