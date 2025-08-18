@@ -75,6 +75,7 @@ class Bot
         public DateTime? CompletedAt { get; set; }
         public bool IsAccepted { get; set; }
         public string? ImageUrl { get; set; }
+        public string? CorrectAnswer { get; set; } // Store the correct answer separately
         public Dictionary<ulong, int> GuessAttempts { get; set; } = new Dictionary<ulong, int>();
         public int ChallengerAttempts { get; set; } = 0;
         public int ChallengedAttempts { get; set; } = 0;
@@ -2454,7 +2455,7 @@ else if (command.Data.Name == "meme")
         {
             // Send image for the challenge
             var imageUploader = await SendPostRequestAsync("image");
-            challenge.ImageUrl = imageUploader; // Store the uploader info
+            challenge.CorrectAnswer = imageUploader; // Store the correct answer
             SaveRetarChallenges();
 
             var embed = new EmbedBuilder()
@@ -2562,7 +2563,7 @@ else if (command.Data.Name == "meme")
         SaveRetarChallenges();
 
         // Check if the guess is correct
-        bool isCorrect = string.Equals(answer.Trim(), challenge.ImageUrl?.Trim(), StringComparison.OrdinalIgnoreCase);
+        bool isCorrect = string.Equals(answer.Trim(), challenge.CorrectAnswer?.Trim(), StringComparison.OrdinalIgnoreCase);
 
         if (isCorrect)
         {
@@ -2621,7 +2622,7 @@ else if (command.Data.Name == "meme")
                         .WithDescription("Ambos jugadores han agotado sus intentos.")
                         .WithColor(Color.Red)
                         .AddField("💔 Resultado", "Los créditos se han perdido", true)
-                        .AddField("✅ Respuesta Correcta", challenge.ImageUrl ?? "Desconocida", false)
+                        .AddField("✅ Respuesta Correcta", challenge.CorrectAnswer ?? "Desconocida", false)
                         .WithFooter($"Reto completado")
                         .WithTimestamp(DateTimeOffset.Now)
                         .Build();
