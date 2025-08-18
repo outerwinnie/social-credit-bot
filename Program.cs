@@ -1933,7 +1933,7 @@ else if (command.Data.Name == "meme")
                 // Check answer by comparing with the uploader stored in challenge.ImageUrl
                 try
                 {
-                    bool isCorrect = challenge.ImageUrl != null && challenge.ImageUrl.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
+                    bool isCorrect = challenge.CorrectAnswer != null && challenge.CorrectAnswer.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
 
                     var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
                     var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
