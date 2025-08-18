@@ -1945,10 +1945,6 @@ else if (command.Data.Name == "meme")
                 var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
                 var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
                 
-                if (targetChannel != null)
-                {
-                    await targetChannel.SendMessageAsync($"📝 <@{userId}> ha enviado su respuesta para la Ronda {challenge.CurrentRound}.");
-                }
 
                 // Check if both players have guessed
                 var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
@@ -1958,13 +1954,6 @@ else if (command.Data.Name == "meme")
                 if (bothGuessed && targetChannel != null)
                 {
                     await EvaluateRoundFromSlashCommand(targetChannel, challenge, challenge.ChallengeId);
-                }
-                else if (targetChannel != null)
-                {
-                    // Wait for the other player
-                    ulong waitingForId = currentRoundGuesses.ContainsKey(challenge.ChallengerId) ? 
-                                       challenge.ChallengedId : challenge.ChallengerId;
-                    await targetChannel.SendMessageAsync($"⏳ Esperando la respuesta de <@{waitingForId}> para la Ronda {challenge.CurrentRound}...");
                 }
             }
             else if (command.Data.Name == "puzzle")
