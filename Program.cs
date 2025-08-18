@@ -1832,19 +1832,6 @@ else if (command.Data.Name == "meme")
                     return;
                 }
 
-                // Check if challenger has created a challenge in the last 24 hours
-                var recentChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    c.ChallengerId == challengerId && 
-                    DateTime.Now - c.CreatedAt < TimeSpan.FromHours(24));
-
-                if (recentChallenge != null)
-                {
-                    var timeRemaining = TimeSpan.FromHours(24) - (DateTime.Now - recentChallenge.CreatedAt);
-                    var hoursLeft = (int)Math.Ceiling(timeRemaining.TotalHours);
-                    await command.RespondAsync($"Solo puedes crear un reto cada 24 horas. Podrás crear otro reto en {hoursLeft} horas.", ephemeral: true);
-                    return;
-                }
-
                 // Create new challenge
                 string challengeId = Guid.NewGuid().ToString();
                 var challenge = new RetarChallenge
@@ -1946,7 +1933,7 @@ else if (command.Data.Name == "meme")
                 // Check answer by comparing with the uploader stored in challenge.ImageUrl
                 try
                 {
-                    bool isCorrect = challenge.ImageUrl != null && challenge.ImageUrl.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
+                    bool isCorrect = challenge.CorrectAnswer != null && challenge.CorrectAnswer.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
 
                     var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
                     var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
@@ -2007,7 +1994,7 @@ else if (command.Data.Name == "meme")
                                     .WithColor(Color.Red)
                                     .AddField("💔 Resultado", "Nadie gana", true)
                                     .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
-                                    .AddField("✅ Respuesta Correcta", $"@{challenge.ImageUrl ?? "Desconocida"}", false)
+                                    .AddField("✅ Respuesta Correcta", $"@{challenge.CorrectAnswer ?? "Desconocida"}", false)
                                     .WithTimestamp(DateTimeOffset.Now)
                                     .Build();
 
@@ -2454,7 +2441,7 @@ else if (command.Data.Name == "meme")
         try
         {
             // Send image for the challenge
-            var imageUploader = await SendPostRequestAsync("image");
+            var imageUploader = await SendRetarImageAsync();
             challenge.CorrectAnswer = imageUploader; // Store the correct answer
             SaveRetarChallenges();
 
@@ -2787,7 +2774,9 @@ else if (command.Data.Name == "meme")
         SaveRetarChallenges();
         
         // Send image for the challenge
-        await SendPostRequestAsync("image");
+        var imageUploader = await SendRetarImageAsync();
+        challenge.CorrectAnswer = imageUploader; // Store the correct answer
+        SaveRetarChallenges();
         
         var embed = new EmbedBuilder()
             .WithTitle("✅ ¡Reto Aceptado!")
