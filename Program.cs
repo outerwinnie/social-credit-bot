@@ -2454,7 +2454,7 @@ else if (command.Data.Name == "meme")
         try
         {
             // Send image for the challenge
-            var imageUploader = await SendPostRequestAsync("image");
+            var imageUploader = await SendRetarImageAsync();
             challenge.CorrectAnswer = imageUploader; // Store the correct answer
             SaveRetarChallenges();
 
@@ -2787,7 +2787,9 @@ else if (command.Data.Name == "meme")
         SaveRetarChallenges();
         
         // Send image for the challenge
-        await SendPostRequestAsync("image");
+        var imageUploader = await SendRetarImageAsync();
+        challenge.CorrectAnswer = imageUploader; // Store the correct answer
+        SaveRetarChallenges();
         
         var embed = new EmbedBuilder()
             .WithTitle("✅ ¡Reto Aceptado!")
