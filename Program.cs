@@ -1832,19 +1832,6 @@ else if (command.Data.Name == "meme")
                     return;
                 }
 
-                // Check if challenger has created a challenge in the last 24 hours
-                var recentChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    c.ChallengerId == challengerId && 
-                    DateTime.Now - c.CreatedAt < TimeSpan.FromHours(24));
-
-                if (recentChallenge != null)
-                {
-                    var timeRemaining = TimeSpan.FromHours(24) - (DateTime.Now - recentChallenge.CreatedAt);
-                    var hoursLeft = (int)Math.Ceiling(timeRemaining.TotalHours);
-                    await command.RespondAsync($"Solo puedes crear un reto cada 24 horas. Podrás crear otro reto en {hoursLeft} horas.", ephemeral: true);
-                    return;
-                }
-
                 // Create new challenge
                 string challengeId = Guid.NewGuid().ToString();
                 var challenge = new RetarChallenge
