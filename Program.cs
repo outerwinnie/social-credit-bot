@@ -42,6 +42,7 @@ class Bot
     private readonly int _dailyQuizReward_1;
     private readonly int _dailyQuizReward_2;
     private readonly int _dailyQuizReward_3;
+    private readonly decimal _retarRoundMultiplier;
     private string? _uploader = string.Empty;
     private HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private List<ulong> _revelarCorrectUsers = new List<ulong>();
@@ -76,13 +77,16 @@ class Bot
         public bool IsAccepted { get; set; }
         public string? ImageUrl { get; set; }
         public string? CorrectAnswer { get; set; } // Store the correct answer separately
-        public Dictionary<ulong, int> GuessAttempts { get; set; } = new Dictionary<ulong, int>();
-        public int ChallengerAttempts { get; set; } = 0;
-        public int ChallengedAttempts { get; set; } = 0;
         public ulong? WinnerId { get; set; }
         public bool IsCompleted { get; set; }
         public ulong MessageId { get; set; }
         public ulong ChannelId { get; set; }
+        
+        // Round-based system properties
+        public int CurrentRound { get; set; } = 1;
+        public int CurrentBetAmount { get; set; } // Tracks current bet amount (can be multiplied)
+        public Dictionary<int, Dictionary<ulong, string>> RoundGuesses { get; set; } = new Dictionary<int, Dictionary<ulong, string>>();
+        public bool WaitingForBothGuesses { get; set; } = false;
     }
 
     private class Puzzle
@@ -255,6 +259,11 @@ class Bot
         if (!int.TryParse(Environment.GetEnvironmentVariable("RECUERDATE_PRICE"), out _recuerdatePrice))
         {
             _recuerdatePrice = 15; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!decimal.TryParse(Environment.GetEnvironmentVariable("RETAR_ROUND_MULTIPLIER"), out _retarRoundMultiplier))
+        {
+            _retarRoundMultiplier = 1.5m; // Default value if the environment variable is not set or invalid
         }
 
         var interactionService = new InteractionService(_client.Rest);
@@ -563,6 +572,7 @@ class Bot
         ScheduleDailyTask();
         Console.WriteLine($"DAILY_TASK_TIME: {_dailyTaskTime}");
         Console.WriteLine($"DAILY_TASK_REWARD: {_dailyTaskReward}");
+        Console.WriteLine($"RETAR_ROUND_MULTIPLIER: {_retarRoundMultiplier}");
 
         // Schedule periodic puzzle expiration checks
         SchedulePuzzleExpirationCheck();
@@ -1840,9 +1850,13 @@ else if (command.Data.Name == "meme")
                     ChallengerId = challengerId,
                     ChallengedId = challengedId,
                     BetAmount = betAmount,
+                    CurrentBetAmount = betAmount,
                     CreatedAt = DateTime.Now,
                     IsAccepted = false,
-                    IsCompleted = false
+                    IsCompleted = false,
+                    CurrentRound = 1,
+                    RoundGuesses = new Dictionary<int, Dictionary<ulong, string>>(),
+                    WaitingForBothGuesses = false
                 };
 
                 _activeRetarChallenges[challengeId] = challenge;
@@ -1897,10 +1911,12 @@ else if (command.Data.Name == "meme")
                 var guessedUser = (IUser)command.Data.Options.First().Value;
                 var guessedUsername = guessedUser.Username;
 
-                // Find active challenge where this user is a participant
-                var challenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    (c.ChallengerId == userId || c.ChallengedId == userId) && 
-                    c.IsAccepted && !c.IsCompleted);
+                // Find most recent active challenge where this user is a participant
+                var challenge = _activeRetarChallenges.Values
+                    .Where(c => (c.ChallengerId == userId || c.ChallengedId == userId) && 
+                               c.IsAccepted && !c.IsCompleted)
+                    .OrderByDescending(c => c.AcceptedAt)
+                    .FirstOrDefault();
 
                 if (challenge == null)
                 {
@@ -1908,107 +1924,38 @@ else if (command.Data.Name == "meme")
                     return;
                 }
 
-                // Check if user has attempts left
-                if (userId == challenge.ChallengerId)
+                // Initialize round guesses if not exists
+                if (!challenge.RoundGuesses.ContainsKey(challenge.CurrentRound))
                 {
-                    if (challenge.ChallengerAttempts >= 2)
-                    {
-                        await command.RespondAsync("Ya has usado todos tus intentos.", ephemeral: true);
-                        return;
-                    }
-                    challenge.ChallengerAttempts++;
-                }
-                else
-                {
-                    if (challenge.ChallengedAttempts >= 2)
-                    {
-                        await command.RespondAsync("Ya has usado todos tus intentos.", ephemeral: true);
-                        return;
-                    }
-                    challenge.ChallengedAttempts++;
+                    challenge.RoundGuesses[challenge.CurrentRound] = new Dictionary<ulong, string>();
                 }
 
+                // Check if user already guessed in this round
+                if (challenge.RoundGuesses[challenge.CurrentRound].ContainsKey(userId))
+                {
+                    await command.RespondAsync($"Ya has hecho tu intento en la Ronda {challenge.CurrentRound}.", ephemeral: true);
+                    return;
+                }
+
+                // Store the guess
+                challenge.RoundGuesses[challenge.CurrentRound][userId] = guessedUsername;
                 SaveRetarChallenges();
 
-                // Check answer by comparing with the uploader stored in challenge.ImageUrl
-                try
+                await command.RespondAsync($"📝 Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
+
+                // Send notification to channel
+                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                
+
+                // Check if both players have guessed
+                var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+                bool bothGuessed = currentRoundGuesses.ContainsKey(challenge.ChallengerId) && 
+                                  currentRoundGuesses.ContainsKey(challenge.ChallengedId);
+
+                if (bothGuessed && targetChannel != null)
                 {
-                    bool isCorrect = challenge.CorrectAnswer != null && challenge.CorrectAnswer.Equals(guessedUsername, StringComparison.OrdinalIgnoreCase);
-
-                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                    if (isCorrect)
-                    {
-                        // User wins - transfer credits
-                        LoadData();
-                        _userReactionCounts[userId] += challenge.BetAmount * 2;
-                        SaveData();
-
-                        challenge.IsCompleted = true;
-                        challenge.WinnerId = userId;
-                        SaveRetarChallenges();
-
-                        if (targetChannel != null)
-                        {
-                            var embed = new EmbedBuilder()
-                                .WithTitle("🎉 ¡Reto Completado!")
-                                .WithDescription($"<@{userId}> ha adivinado correctamente!")
-                                .WithColor(Color.Green)
-                                .AddField("🏆 Ganador", $"<@{userId}>", true)
-                                .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
-                                .AddField("✅ Respuesta Correcta", $"@{guessedUsername}", false)
-                                .WithTimestamp(DateTimeOffset.Now)
-                                .Build();
-
-                            await targetChannel.SendMessageAsync(embed: embed);
-                        }
-
-                        await command.RespondAsync($"¡Correcto! Has ganado {challenge.BetAmount * 2} créditos.", ephemeral: true);
-                        Console.WriteLine($"[RETAR] Challenge won by {userId}: {challenge.ChallengeId}");
-                    }
-                    else
-                    {
-                        // Wrong answer
-                        int attemptsLeft = userId == challenge.ChallengerId ? 
-                            (2 - challenge.ChallengerAttempts) : (2 - challenge.ChallengedAttempts);
-
-                        if (targetChannel != null)
-                        {
-                            await targetChannel.SendMessageAsync($"❌ <@{userId}> falló. Le quedan {attemptsLeft} intentos.");
-                        }
-
-                        await command.RespondAsync($"Incorrecto. Te quedan {attemptsLeft} intentos.", ephemeral: true);
-
-                        // Check if both players have used all attempts
-                        if (challenge.ChallengerAttempts >= 2 && challenge.ChallengedAttempts >= 2)
-                        {
-                            challenge.IsCompleted = true;
-                            SaveRetarChallenges();
-
-                            if (targetChannel != null)
-                            {
-                                var embed = new EmbedBuilder()
-                                    .WithTitle("💸 Reto Fallido")
-                                    .WithDescription("Ambos jugadores han fallado todas sus oportunidades.")
-                                    .WithColor(Color.Red)
-                                    .AddField("💔 Resultado", "Nadie gana", true)
-                                    .AddField("💸 Créditos perdidos", $"{challenge.BetAmount * 2} créditos", true)
-                                    .AddField("✅ Respuesta Correcta", $"@{challenge.CorrectAnswer ?? "Desconocida"}", false)
-                                    .WithTimestamp(DateTimeOffset.Now)
-                                    .Build();
-
-                                await targetChannel.SendMessageAsync(embed: embed);
-                            }
-
-                            Console.WriteLine($"[RETAR] Challenge failed by both players: {challenge.ChallengeId}");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error checking answer: {ex.Message}");
-                    await command.RespondAsync("Error al verificar la respuesta. Inténtalo de nuevo.", ephemeral: true);
+                    await EvaluateRoundFromSlashCommand(targetChannel, challenge, challenge.ChallengeId);
                 }
             }
             else if (command.Data.Name == "puzzle")
@@ -2436,6 +2383,7 @@ else if (command.Data.Name == "meme")
         SaveData();
 
         challenge.IsAccepted = true;
+        challenge.CurrentBetAmount = challenge.BetAmount; // Initialize current bet amount
         SaveRetarChallenges();
 
         try
@@ -2449,12 +2397,14 @@ else if (command.Data.Name == "meme")
                 .WithTitle("🎯 ¡Reto Aceptado!")
                 .WithDescription($"<@{challenge.ChallengedId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
                 .WithColor(Color.Green)
-                .AddField("💰 Apuesta Total", $"{challenge.BetAmount * 2} créditos", true)
+                .AddField("💰 Apuesta Total", $"{challenge.CurrentBetAmount * 2} créditos", true)
+                .AddField("🔄 Ronda", $"Ronda {challenge.CurrentRound}", true)
                 .AddField("🎮 Reglas", 
-                    "• Solo los participantes pueden adivinar\n" +
-                    "• Cada uno tiene 2 intentos\n" +
-                    "• El ganador se lleva todos los créditos\n" +
-                    "• Si ambos fallan, los créditos se pierden", false)
+                    "• Sistema de rondas: una respuesta por jugador por ronda\n" +
+                    "• Después de que ambos respondan, se evalúa quién gana\n" +
+                    "• Si ambos fallan, nueva ronda con imagen nueva\n" +
+                    "• La apuesta se multiplica cada ronda\n" +
+                    "• El ganador se lleva todos los créditos", false)
                 .AddField("📝 Cómo jugar", 
                     $"Usen 'adivino {challengeId} [respuesta]' para participar", false)
                 .WithTimestamp(DateTimeOffset.Now)
@@ -2534,91 +2484,259 @@ else if (command.Data.Name == "meme")
             return;
         }
 
-        // Check attempts
-        if (!challenge.GuessAttempts.ContainsKey(userId))
+        // Initialize round guesses if not exists
+        if (!challenge.RoundGuesses.ContainsKey(challenge.CurrentRound))
         {
-            challenge.GuessAttempts[userId] = 0;
+            challenge.RoundGuesses[challenge.CurrentRound] = new Dictionary<ulong, string>();
         }
 
-        if (challenge.GuessAttempts[userId] >= 2)
+        // Check if user already guessed in this round
+        if (challenge.RoundGuesses[challenge.CurrentRound].ContainsKey(userId))
         {
-            await message.Channel.SendMessageAsync("Ya has usado tus 2 intentos.");
+            await message.Channel.SendMessageAsync($"Ya has hecho tu intento en la Ronda {challenge.CurrentRound}.");
             return;
         }
 
-        challenge.GuessAttempts[userId]++;
+        // Store the guess
+        challenge.RoundGuesses[challenge.CurrentRound][userId] = answer;
         SaveRetarChallenges();
 
-        // Check if the guess is correct
-        bool isCorrect = string.Equals(answer.Trim(), challenge.CorrectAnswer?.Trim(), StringComparison.OrdinalIgnoreCase);
+        await message.Channel.SendMessageAsync($"📝 <@{userId}> ha enviado su respuesta para la Ronda {challenge.CurrentRound}.");
 
-        if (isCorrect)
+        // Check if both players have guessed
+        var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+        bool bothGuessed = currentRoundGuesses.ContainsKey(challenge.ChallengerId) && 
+                          currentRoundGuesses.ContainsKey(challenge.ChallengedId);
+
+        if (bothGuessed)
         {
-            // Winner found!
-            challenge.WinnerId = userId;
-            challenge.IsCompleted = true;
+            await EvaluateRound(message, challenge, challengeId);
+        }
+        else
+        {
+            // Wait for the other player
+            ulong waitingForId = currentRoundGuesses.ContainsKey(challenge.ChallengerId) ? 
+                               challenge.ChallengedId : challenge.ChallengerId;
+            await message.Channel.SendMessageAsync($"⏳ Esperando la respuesta de <@{waitingForId}> para la Ronda {challenge.CurrentRound}...");
+        }
+    }
 
-            // Award all credits to winner
-            LoadData();
-            if (!_userReactionCounts.ContainsKey(userId))
-                _userReactionCounts[userId] = 0;
-            
-            _userReactionCounts[userId] += challenge.BetAmount * 2;
-            SaveData();
+    private async Task EvaluateRound(SocketMessage message, RetarChallenge challenge, string challengeId)
+    {
+        var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+        var challengerGuess = currentRoundGuesses[challenge.ChallengerId];
+        var challengedGuess = currentRoundGuesses[challenge.ChallengedId];
+        
+        bool challengerCorrect = string.Equals(challengerGuess.Trim(), challenge.CorrectAnswer?.Trim(), StringComparison.OrdinalIgnoreCase);
+        bool challengedCorrect = string.Equals(challengedGuess.Trim(), challenge.CorrectAnswer?.Trim(), StringComparison.OrdinalIgnoreCase);
 
-            _activeRetarChallenges.Remove(challengeId);
+        if (challengerCorrect && challengedCorrect)
+        {
+            // Both correct - tie, continue to next round
+            await StartNextRound(message, challenge, challengeId, "Ambos han adivinado correctamente");
+        }
+        else if (challengerCorrect)
+        {
+            // Challenger wins
+            await CompleteChallenge(message, challenge, challengeId, challenge.ChallengerId);
+        }
+        else if (challengedCorrect)
+        {
+            // Challenged wins
+            await CompleteChallenge(message, challenge, challengeId, challenge.ChallengedId);
+        }
+        else
+        {
+            // Both wrong - start next round
+            await StartNextRound(message, challenge, challengeId, "Ambos han fallado");
+        }
+    }
+
+    private async Task StartNextRound(SocketMessage message, RetarChallenge challenge, string challengeId, string reason)
+    {
+        challenge.CurrentRound++;
+        var roundMultiplier = 1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1));
+        challenge.CurrentBetAmount = (int)Math.Round(challenge.BetAmount * roundMultiplier);
+        
+        try
+        {
+            // Get new image for next round
+            var newImageUploader = await SendRetarImageAsync();
+            challenge.CorrectAnswer = newImageUploader;
             SaveRetarChallenges();
 
             var embed = new EmbedBuilder()
-                .WithTitle("🎉 ¡Tenemos un Ganador!")
-                .WithDescription($"<@{userId}> ha adivinado correctamente!")
-                .WithColor(Color.Gold)
-                .AddField("🏆 Ganador", $"<@{userId}>", true)
-                .AddField("💰 Premio", $"{challenge.BetAmount * 2} créditos", true)
-                .AddField("✅ Respuesta Correcta", answer, false)
-                .WithFooter($"Reto completado")
+                .WithTitle($"🔄 Ronda {challenge.CurrentRound}")
+                .WithDescription($"{reason}. ¡Nueva ronda!")
+                .WithColor(Color.Blue)
+                .AddField("💰 Apuesta Actual", $"{challenge.BetAmount * roundMultiplier * 2:F1} créditos", true)
+                .AddField("📈 Multiplicador", $"x{1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1)):F2}", true)
+                .AddField("📝 Instrucciones", 
+                    $"Ambos jugadores deben usar 'adivino {challengeId} [respuesta]' nuevamente", false)
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
             await message.Channel.SendMessageAsync(embed: embed);
-            Console.WriteLine($"[RETAR] Challenge won by {userId}: {challengeId}");
+            Console.WriteLine($"[RETAR] Round {challenge.CurrentRound} started for challenge {challengeId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting new round: {ex.Message}");
+            await message.Channel.SendMessageAsync("Error al obtener nueva imagen. El reto ha sido cancelado.");
+            
+            // Refund credits
+            LoadData();
+            _userReactionCounts[challenge.ChallengerId] += challenge.BetAmount;
+            _userReactionCounts[challenge.ChallengedId] += challenge.BetAmount;
+            SaveData();
+            
+            _activeRetarChallenges.Remove(challengeId);
+            SaveRetarChallenges();
+        }
+    }
+
+    private async Task CompleteChallenge(SocketMessage message, RetarChallenge challenge, string challengeId, ulong winnerId)
+    {
+        challenge.WinnerId = winnerId;
+        challenge.IsCompleted = true;
+
+        // Award all credits to winner
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(winnerId))
+            _userReactionCounts[winnerId] = 0;
+        
+        _userReactionCounts[winnerId] += challenge.CurrentBetAmount * 2;
+        SaveData();
+
+        _activeRetarChallenges.Remove(challengeId);
+        SaveRetarChallenges();
+
+        var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+        var winnerGuess = currentRoundGuesses[winnerId];
+
+        var embed = new EmbedBuilder()
+            .WithTitle("🎉 ¡Tenemos un Ganador!")
+            .WithDescription($"<@{winnerId}> ha adivinado correctamente en la Ronda {challenge.CurrentRound}!")
+            .WithColor(Color.Gold)
+            .AddField("🏆 Ganador", $"<@{winnerId}>", true)
+            .AddField("💰 Premio", $"{challenge.CurrentBetAmount * 2} créditos", true)
+            .AddField("🔄 Ronda Final", $"Ronda {challenge.CurrentRound}", true)
+            .AddField("✅ Respuesta Correcta", winnerGuess, false)
+            .WithFooter($"Reto completado")
+            .WithTimestamp(DateTimeOffset.Now)
+            .Build();
+
+        await message.Channel.SendMessageAsync(embed: embed);
+        Console.WriteLine($"[RETAR] Challenge won by {winnerId} in round {challenge.CurrentRound}: {challengeId}");
+    }
+
+    private async Task EvaluateRoundFromSlashCommand(IMessageChannel channel, RetarChallenge challenge, string challengeId)
+    {
+        var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+        var challengerGuess = currentRoundGuesses[challenge.ChallengerId];
+        var challengedGuess = currentRoundGuesses[challenge.ChallengedId];
+        
+        bool challengerCorrect = string.Equals(challengerGuess.Trim(), challenge.CorrectAnswer?.Trim(), StringComparison.OrdinalIgnoreCase);
+        bool challengedCorrect = string.Equals(challengedGuess.Trim(), challenge.CorrectAnswer?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        if (challengerCorrect && challengedCorrect)
+        {
+            // Both correct - tie, continue to next round
+            await StartNextRoundFromSlashCommand(channel, challenge, challengeId, "Ambos han adivinado correctamente");
+        }
+        else if (challengerCorrect)
+        {
+            // Challenger wins
+            await CompleteChallengeFromSlashCommand(channel, challenge, challengeId, challenge.ChallengerId);
+        }
+        else if (challengedCorrect)
+        {
+            // Challenged wins
+            await CompleteChallengeFromSlashCommand(channel, challenge, challengeId, challenge.ChallengedId);
         }
         else
         {
-            int remainingAttempts = 2 - challenge.GuessAttempts[userId];
-            
-            await message.Channel.SendMessageAsync($"❌ <@{userId}> ha fallado. Le quedan {remainingAttempts} intentos.");
-
-            if (remainingAttempts == 0)
-            {
-                // Check if both players have used all attempts
-                bool bothPlayersExhausted = challenge.GuessAttempts.ContainsKey(challenge.ChallengerId) && 
-                                          challenge.GuessAttempts.ContainsKey(challenge.ChallengedId) &&
-                                          challenge.GuessAttempts[challenge.ChallengerId] >= 2 &&
-                                          challenge.GuessAttempts[challenge.ChallengedId] >= 2;
-
-                if (bothPlayersExhausted)
-                {
-                    // Both failed - credits are lost
-                    challenge.IsCompleted = true;
-                    _activeRetarChallenges.Remove(challengeId);
-                    SaveRetarChallenges();
-
-                    var embed = new EmbedBuilder()
-                        .WithTitle("💸 Reto Fallido")
-                        .WithDescription("Ambos jugadores han agotado sus intentos.")
-                        .WithColor(Color.Red)
-                        .AddField("💔 Resultado", "Los créditos se han perdido", true)
-                        .AddField("✅ Respuesta Correcta", challenge.CorrectAnswer ?? "Desconocida", false)
-                        .WithFooter($"Reto completado")
-                        .WithTimestamp(DateTimeOffset.Now)
-                        .Build();
-
-                    await message.Channel.SendMessageAsync(embed: embed);
-                    Console.WriteLine($"[RETAR] Challenge failed by both players: {challengeId}");
-                }
-            }
+            // Both wrong - start next round
+            await StartNextRoundFromSlashCommand(channel, challenge, challengeId, "Ambos han fallado");
         }
+    }
+
+    private async Task StartNextRoundFromSlashCommand(IMessageChannel channel, RetarChallenge challenge, string challengeId, string reason)
+    {
+        challenge.CurrentRound++;
+        var roundMultiplier = 1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1));
+        challenge.CurrentBetAmount = (int)Math.Round(challenge.BetAmount * roundMultiplier);
+        
+        try
+        {
+            // Get new image for next round
+            var newImageUploader = await SendRetarImageAsync();
+            challenge.CorrectAnswer = newImageUploader;
+            SaveRetarChallenges();
+
+            var embed = new EmbedBuilder()
+                .WithTitle($"🔄 Ronda {challenge.CurrentRound}")
+                .WithDescription($"{reason}. ¡Nueva ronda!")
+                .WithColor(Color.Blue)
+                .AddField("💰 Apuesta Actual", $"{challenge.BetAmount * roundMultiplier * 2:F1} créditos", true)
+                .AddField("📈 Multiplicador", $"x{1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1)):F2}", true)
+                .AddField("📝 Instrucciones", 
+                    $"Ambos jugadores deben usar `/adivino [usuario]` nuevamente", false)
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            await channel.SendMessageAsync(embed: embed);
+            Console.WriteLine($"[RETAR] Round {challenge.CurrentRound} started for challenge {challengeId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting new round: {ex.Message}");
+            await channel.SendMessageAsync("Error al obtener nueva imagen. El reto ha sido cancelado.");
+            
+            // Refund credits
+            LoadData();
+            _userReactionCounts[challenge.ChallengerId] += challenge.BetAmount;
+            _userReactionCounts[challenge.ChallengedId] += challenge.BetAmount;
+            SaveData();
+            
+            _activeRetarChallenges.Remove(challengeId);
+            SaveRetarChallenges();
+        }
+    }
+
+    private async Task CompleteChallengeFromSlashCommand(IMessageChannel channel, RetarChallenge challenge, string challengeId, ulong winnerId)
+    {
+        challenge.WinnerId = winnerId;
+        challenge.IsCompleted = true;
+
+        // Award all credits to winner
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(winnerId))
+            _userReactionCounts[winnerId] = 0;
+        
+        _userReactionCounts[winnerId] += challenge.CurrentBetAmount * 2;
+        SaveData();
+
+        _activeRetarChallenges.Remove(challengeId);
+        SaveRetarChallenges();
+
+        var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+        var winnerGuess = currentRoundGuesses[winnerId];
+
+        var embed = new EmbedBuilder()
+            .WithTitle("🎉 ¡Tenemos un Ganador!")
+            .WithDescription($"<@{winnerId}> ha adivinado correctamente en la Ronda {challenge.CurrentRound}!")
+            .WithColor(Color.Gold)
+            .AddField("🏆 Ganador", $"<@{winnerId}>", true)
+            .AddField("💰 Premio", $"{challenge.CurrentBetAmount * 2} créditos", true)
+            .AddField("🔄 Ronda Final", $"Ronda {challenge.CurrentRound}", true)
+            .AddField("✅ Respuesta Correcta", $"@{winnerGuess}", false)
+            .WithFooter($"Reto completado")
+            .WithTimestamp(DateTimeOffset.Now)
+            .Build();
+
+        await channel.SendMessageAsync(embed: embed);
+        Console.WriteLine($"[RETAR] Challenge won by {winnerId} in round {challenge.CurrentRound}: {challengeId}");
     }
     
     private void RedistributeWealth(decimal percentage)
@@ -2771,6 +2889,7 @@ else if (command.Data.Name == "meme")
         // Mark challenge as accepted and start the game
         challenge.IsAccepted = true;
         challenge.AcceptedAt = DateTime.Now;
+        challenge.CurrentBetAmount = challenge.BetAmount; // Initialize current bet amount
         SaveRetarChallenges();
         
         // Send image for the challenge
@@ -2782,8 +2901,14 @@ else if (command.Data.Name == "meme")
             .WithTitle("✅ ¡Reto Aceptado!")
             .WithDescription($"<@{userId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
             .WithColor(Color.Green)
-            .AddField("💰 Apuesta", $"{challenge.BetAmount} créditos", true)
-            .AddField("🎯 Estado", "Imagen enviada - ¡Empiecen a adivinar!", true)
+            .AddField("💰 Apuesta Total", $"{challenge.CurrentBetAmount * 2} créditos", true)
+            .AddField("🔄 Ronda", $"Ronda {challenge.CurrentRound}", true)
+            .AddField("🎮 Reglas", 
+                "• Sistema de rondas: una respuesta por jugador por ronda\n" +
+                "• Después de que ambos respondan, se evalúa quién gana\n" +
+                "• Si ambos fallan, nueva ronda con imagen nueva\n" +
+                "• La apuesta se multiplica cada ronda\n" +
+                "• El ganador se lleva todos los créditos", false)
             .AddField("📝 Instrucciones", "Usen `/adivino @usuario` para hacer sus intentos", false)
             .WithTimestamp(DateTimeOffset.Now)
             .Build();
@@ -2824,9 +2949,10 @@ else if (command.Data.Name == "meme")
             return;
         }
         
-        // Mark challenge as completed (rejected)
+        // Mark challenge as completed (rejected) and remove from active challenges
         challenge.IsCompleted = true;
         challenge.CompletedAt = DateTime.Now;
+        _activeRetarChallenges.Remove(challengeId);
         SaveRetarChallenges();
         
         var embed = new EmbedBuilder()
@@ -2856,9 +2982,16 @@ else if (command.Data.Name == "meme")
     private async Task CleanupExpiredChallenges()
     {
         LoadRetarChallenges();
+        
+        // Clean up unaccepted expired challenges
         var expiredChallenges = _activeRetarChallenges.Values
             .Where(c => !c.IsAccepted && !c.IsCompleted && 
                        DateTime.Now - c.CreatedAt > TimeSpan.FromHours(24))
+            .ToList();
+            
+        // Clean up completed challenges
+        var completedChallenges = _activeRetarChallenges.Values
+            .Where(c => c.IsCompleted)
             .ToList();
 
         foreach (var challenge in expiredChallenges)
@@ -2901,8 +3034,15 @@ else if (command.Data.Name == "meme")
                 Console.WriteLine($"Error cleaning up expired challenge {challenge.ChallengeId}: {ex.Message}");
             }
         }
+        
+        // Clean up completed challenges
+        foreach (var challenge in completedChallenges)
+        {
+            _activeRetarChallenges.Remove(challenge.ChallengeId);
+            Console.WriteLine($"[RETAR] Completed challenge cleaned up: {challenge.ChallengeId}");
+        }
 
-        if (expiredChallenges.Any())
+        if (expiredChallenges.Any() || completedChallenges.Any())
         {
             SaveRetarChallenges();
         }
