@@ -847,41 +847,34 @@ class Bot
         await _client.Rest.CreateGuildCommand(redeemMemeGuildCommand, _guildId);
         Console.WriteLine("Slash command 'meme' registered for the guild.");
         
-        var addCreditsCommand = new SlashCommandBuilder()
-            .WithName("añadir")
-            .WithDescription("Añade créditos a un usuario (solo admin)")
+        // Unified admin command with subcommands
+        var adminCommand = new SlashCommandBuilder()
+            .WithName("admin")
+            .WithDescription("Comandos de administración (solo admin)")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("accion")
+                .WithDescription("Acción a realizar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String)
+                .AddChoice("Añadir créditos", "añadir")
+                .AddChoice("Descontar créditos", "descontar")
+                .AddChoice("Mostrar clasificación", "clasificacion")
+                .AddChoice("Aprovar puzzles", "aprovar")
+                .AddChoice("Finalizar puzzle", "finalizar"))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
-                .WithDescription("ID del usuario al que añadir créditos")
-                .WithRequired(true)
+                .WithDescription("Usuario objetivo (para añadir/descontar)")
+                .WithRequired(false)
                 .WithType(ApplicationCommandOptionType.User))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
-                .WithDescription("Cantidad de créditos a añadir")
-                .WithRequired(true)
+                .WithDescription("Cantidad de créditos (para añadir/descontar)")
+                .WithRequired(false)
                 .WithType(ApplicationCommandOptionType.Integer));
         
-        var addCreditsGuildCommand = addCreditsCommand.Build();
-        await _client.Rest.CreateGuildCommand(addCreditsGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'añadir' registered for the guild.");
-        
-        var removeCreditsCommand = new SlashCommandBuilder()
-            .WithName("descontar")
-            .WithDescription("Descuenta créditos a un usuario (solo admin)")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("ID del usuario al que descontar créditos")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User))
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("cantidad")
-                .WithDescription("Cantidad de créditos a descontar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
-        
-        var removeCreditsGuildCommand = removeCreditsCommand.Build();
-        await _client.Rest.CreateGuildCommand(removeCreditsGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'descontar' registered for the guild.");
+        var adminGuildCommand = adminCommand.Build();
+        await _client.Rest.CreateGuildCommand(adminGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'admin' registered for the guild.");
         
         var requestChatbotCommand = new SlashCommandBuilder()
             .WithName("preguntar")
@@ -958,13 +951,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(checkCreditsGuildCommand, _guildId);
         Console.WriteLine("Slash command 'saldo' registered for the guild.");
 
-        // Manual leaderboard trigger (admin only)
-        var leaderboardCommand = new SlashCommandBuilder()
-            .WithName("leaderboard")
-            .WithDescription("Envía el leaderboard manualmente (solo admin)");
-        var leaderboardGuildCommand = leaderboardCommand.Build();
-        await _client.Rest.CreateGuildCommand(leaderboardGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'leaderboard' registered for the guild.");
 
         // Retar challenge command
         var retarCommand = new SlashCommandBuilder()
@@ -1024,14 +1010,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(puzzleGuildCommand, _guildId);
         Console.WriteLine("Slash command 'puzzle' registered for the guild.");
 
-        // Puzzle approval command (admin only)
-        var aprovarCommand = new SlashCommandBuilder()
-            .WithName("aprovar")
-            .WithDescription("Aprueba o rechaza puzzles pendientes (solo admin)");
-        
-        var aprovarGuildCommand = aprovarCommand.Build();
-        await _client.Rest.CreateGuildCommand(aprovarGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'aprovar' registered for the guild.");
 
         // Puzzle solving command
         var resolverCommand = new SlashCommandBuilder()
@@ -1047,14 +1025,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(resolverGuildCommand, _guildId);
         Console.WriteLine("Slash command 'resolver' registered for the guild.");
 
-        // Force puzzle expiration command (admin only)
-        var finalizarPuzzleCommand = new SlashCommandBuilder()
-            .WithName("finalizar-puzzle")
-            .WithDescription("Finaliza el puzzle activo inmediatamente (solo admin)");
-        
-        var finalizarPuzzleGuildCommand = finalizarPuzzleCommand.Build();
-        await _client.Rest.CreateGuildCommand(finalizarPuzzleGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'finalizar-puzzle' registered for the guild.");
     }
     
     private void ScheduleMonthlyRedistribution(decimal percentage)
@@ -1322,112 +1292,44 @@ private void ScheduleDailyTask()
                 }
             }
             
-            else if (command.Data.Name == "leaderboard")
+            else if (command.Data.Name == "admin")
             {
-                ulong authorizedUserId = _adminId;
-                if (command.User.Id != authorizedUserId)
+                // Check if user is admin
+                if (command.User.Id != _adminId)
                 {
                     await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
                     return;
                 }
-                await command.DeferAsync(ephemeral: true); // Defer immediately
-                await SendLeaderboardAnnouncementAsync();
-                await command.FollowupAsync(":trophy: Leaderboard enviado al canal.", ephemeral: true);
-            }
-            else if (command.Data.Name == "añadir")
-            {
-                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
 
-                // Define the authorized user ID (replace with the actual user ID)
-                ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
-
-                // Check if the user invoking the command is authorized
-                if (command.User.Id != authorizedUserId)
+                var accionOption = command.Data.Options.FirstOrDefault(o => o.Name == "accion");
+                if (accionOption == null)
                 {
-                    // Respond with an error message if the user is not authorized
-                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
+                    await command.RespondAsync("Debes especificar una acción.", ephemeral: true);
                     return;
                 }
-            
-                if (userOption != null && amountOption != null)
+
+                string accion = accionOption.Value.ToString()!;
+
+                switch (accion)
                 {
-                    ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
-                    int amount = Convert.ToInt32(amountOption.Value);
-                
-                    if (userId != 0)
-                    {
-                        LoadData();
-                    
-                        // Add credits to the user
-                        if (!_userReactionCounts.ContainsKey(userId))
-                        {
-                            _userReactionCounts[userId] = 0;
-                        }
-
-                        _userReactionCounts[userId] += amount;
-                        SaveData(); // Save updated data to CSV
-
-                        // Send a confirmation message
-                        await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
-                    }
-                    else
-                    {
-                        await command.RespondAsync("Usuario no válido.", ephemeral: true);
-                    }
-                }
-                else
-                {
-                    await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
-                }
-            }
-        
-
-else if (command.Data.Name == "descontar")
-            {
-                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
-
-                // Define the authorized user ID (replace with the actual user ID)
-                ulong authorizedUserId = _adminId; // Replace with the actual Discord user ID of the authorized user
-
-                // Check if the user invoking the command is authorized
-                if (command.User.Id != authorizedUserId)
-                {
-                    // Respond with an error message if the user is not authorized
-                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-                    return;
-                }
-            
-                if (userOption != null && amountOption != null)
-                {
-                    ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
-                    int amount = Convert.ToInt32(amountOption.Value);
-                
-                    if (userId != 0)
-                    {
-                        LoadData();
-                    
-                        // Discount credits to the user
-                        if (!_userReactionCounts.ContainsKey(userId))
-                        {
-                            _userReactionCounts[userId] = 0;
-                        }
-
-                        _userReactionCounts[userId] -= amount;
-                        SaveData(); // Save updated data to CSV
-
-                        // Send a confirmation message
-                        await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
-                    }
-                    else
-                    {
-                        await command.RespondAsync("Usuario no válido.", ephemeral: true);
-                    }
-                }
-                else
-                {
-                    await command.RespondAsync("Faltan argumentos. Asegúrese de proporcionar un usuario y una cantidad de créditos.", ephemeral: true);
+                    case "añadir":
+                        await HandleAddCreditsAdmin(command);
+                        break;
+                    case "descontar":
+                        await HandleRemoveCreditsAdmin(command);
+                        break;
+                    case "clasificacion":
+                        await HandleLeaderboardAdmin(command);
+                        break;
+                    case "aprovar":
+                        await HandleAprovarAdmin(command);
+                        break;
+                    case "finalizar":
+                        await HandleFinalizarAdmin(command);
+                        break;
+                    default:
+                        await command.RespondAsync("Acción no válida.", ephemeral: true);
+                        break;
                 }
             }
 
@@ -1998,58 +1900,6 @@ else if (command.Data.Name == "meme")
                 await command.RespondAsync($"✅ Tu puzzle ha sido enviado para aprobación. ID: `{puzzle.PuzzleId}`", ephemeral: true);
                 Console.WriteLine($"[PUZZLE] New puzzle created by {command.User.Username}: {puzzle.PuzzleId}");
             }
-            else if (command.Data.Name == "aprovar")
-            {
-                // Check if user is admin
-                if (command.User.Id != _adminId)
-                {
-                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-                    return;
-                }
-
-                if (_pendingPuzzles.Count == 0)
-                {
-                    await command.RespondAsync("No hay puzzles pendientes de aprobación.", ephemeral: true);
-                    return;
-                }
-
-                if (_activePuzzle != null)
-                {
-                    await command.RespondAsync("Ya hay un puzzle activo. Espera a que termine antes de aprobar otro.", ephemeral: true);
-                    return;
-                }
-
-                var nextPuzzle = _pendingPuzzles.Peek();
-                var creator = _client.GetUser(nextPuzzle.CreatorId);
-                var creatorName = creator?.Username ?? "Usuario desconocido";
-
-                var embed = new EmbedBuilder()
-                    .WithTitle("🧩 Puzzle Pendiente de Aprobación")
-                    .WithDescription("¿Aprobar este puzzle?")
-                    .WithColor(Color.Orange)
-                    .AddField("👤 Creador", creatorName, true)
-                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", nextPuzzle.CorrectAnswers), false);
-
-                if (!string.IsNullOrEmpty(nextPuzzle.Text))
-                {
-                    embed.AddField("📝 Texto", nextPuzzle.Text, false);
-                }
-
-                if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
-                {
-                    embed.AddField("🖼️ Imagen/Video", nextPuzzle.ImageUrl, false);
-                    embed.WithImageUrl(nextPuzzle.ImageUrl);
-                }
-
-                embed.AddField("⚡ Acciones", "Usa los botones para aprobar o rechazar", false);
-
-                var components = new ComponentBuilder()
-                    .WithButton("✅ Aprobar", $"puzzle_approve_{nextPuzzle.PuzzleId}", ButtonStyle.Success)
-                    .WithButton("❌ Rechazar", $"puzzle_reject_{nextPuzzle.PuzzleId}", ButtonStyle.Danger)
-                    .Build();
-
-                await command.RespondAsync(embed: embed.Build(), components: components, ephemeral: true);
-            }
             else if (command.Data.Name == "resolver")
             {
                 var respuestaOption = command.Data.Options.FirstOrDefault(o => o.Name == "respuesta");
@@ -2146,51 +1996,6 @@ else if (command.Data.Name == "meme")
                 }
 
                 SavePuzzles();
-            }
-            else if (command.Data.Name == "finalizar-puzzle")
-            {
-                // Check if user is admin
-                if (command.User.Id != _adminId)
-                {
-                    await command.RespondAsync("No tienes permiso para usar este comando.", ephemeral: true);
-                    return;
-                }
-
-                if (_activePuzzle == null)
-                {
-                    await command.RespondAsync("No hay ningún puzzle activo para finalizar.", ephemeral: true);
-                    return;
-                }
-
-                var puzzleToFinalize = _activePuzzle;
-                Console.WriteLine($"[PUZZLE] Admin force-expired puzzle: {puzzleToFinalize.PuzzleId}");
-
-                // Announce forced expiration in channel
-                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                if (targetChannel != null)
-                {
-                    var embed = new EmbedBuilder()
-                        .WithTitle("🛑 Puzzle Finalizado por Admin")
-                        .WithDescription("El puzzle activo ha sido finalizado manualmente por un administrador.")
-                        .WithColor(Color.Red)
-                        .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", puzzleToFinalize.CorrectAnswers), false)
-                        .AddField("🏆 Ganadores", puzzleToFinalize.CorrectSolvers.Count > 0 ? 
-                            string.Join(", ", puzzleToFinalize.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
-                        .AddField("📊 Estadísticas", 
-                            $"• Ganadores: {puzzleToFinalize.CorrectSolvers.Count}/3\n" +
-                            $"• Intentos totales: {puzzleToFinalize.AttemptedUsers.Count}", false)
-                        .WithTimestamp(DateTimeOffset.Now)
-                        .Build();
-
-                    await targetChannel.SendMessageAsync(embed: embed);
-                }
-
-                _activePuzzle = null;
-                SavePuzzles();
-
-                await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
             }
         }
         
@@ -3273,6 +3078,167 @@ else if (command.Data.Name == "meme")
         {
             Console.WriteLine($"Error writing reward to CSV: {ex.Message}");
         }
+    }
+
+    // Admin command handlers
+    private async Task HandleAddCreditsAdmin(SocketSlashCommand command)
+    {
+        var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+        var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+        if (userOption == null || amountOption == null)
+        {
+            await command.RespondAsync("Faltan argumentos. Debes especificar usuario y cantidad de créditos.", ephemeral: true);
+            return;
+        }
+
+        ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+        int amount = Convert.ToInt32(amountOption.Value);
+
+        if (userId == 0)
+        {
+            await command.RespondAsync("Usuario no válido.", ephemeral: true);
+            return;
+        }
+
+        LoadData();
+
+        // Add credits to the user
+        if (!_userReactionCounts.ContainsKey(userId))
+        {
+            _userReactionCounts[userId] = 0;
+        }
+
+        _userReactionCounts[userId] += amount;
+        SaveData();
+
+        await command.RespondAsync($"Se han añadido {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
+    }
+
+    private async Task HandleRemoveCreditsAdmin(SocketSlashCommand command)
+    {
+        var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+        var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+        if (userOption == null || amountOption == null)
+        {
+            await command.RespondAsync("Faltan argumentos. Debes especificar usuario y cantidad de créditos.", ephemeral: true);
+            return;
+        }
+
+        ulong userId = (userOption.Value as SocketUser)?.Id ?? 0;
+        int amount = Convert.ToInt32(amountOption.Value);
+
+        if (userId == 0)
+        {
+            await command.RespondAsync("Usuario no válido.", ephemeral: true);
+            return;
+        }
+
+        LoadData();
+
+        // Discount credits from the user
+        if (!_userReactionCounts.ContainsKey(userId))
+        {
+            _userReactionCounts[userId] = 0;
+        }
+
+        _userReactionCounts[userId] -= amount;
+        SaveData();
+
+        await command.RespondAsync($"Se han descontado {amount} créditos al usuario <@{userId}>. Créditos actuales: {_userReactionCounts[userId]}", ephemeral: false);
+    }
+
+    private async Task HandleLeaderboardAdmin(SocketSlashCommand command)
+    {
+        await command.DeferAsync(ephemeral: true);
+        await SendLeaderboardAnnouncementAsync();
+        await command.FollowupAsync(":trophy: Clasificación enviada al canal.", ephemeral: true);
+    }
+
+    private async Task HandleAprovarAdmin(SocketSlashCommand command)
+    {
+        if (_pendingPuzzles.Count == 0)
+        {
+            await command.RespondAsync("No hay puzzles pendientes de aprobación.", ephemeral: true);
+            return;
+        }
+
+        if (_activePuzzle != null)
+        {
+            await command.RespondAsync("Ya hay un puzzle activo. Espera a que termine antes de aprobar otro.", ephemeral: true);
+            return;
+        }
+
+        var nextPuzzle = _pendingPuzzles.Peek();
+        var creator = _client.GetUser(nextPuzzle.CreatorId);
+        var creatorName = creator?.Username ?? "Usuario desconocido";
+
+        var embed = new EmbedBuilder()
+            .WithTitle("🧩 Puzzle Pendiente de Aprobación")
+            .WithDescription("¿Aprobar este puzzle?")
+            .WithColor(Color.Orange)
+            .AddField("👤 Creador", creatorName, true)
+            .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", nextPuzzle.CorrectAnswers), false);
+
+        if (!string.IsNullOrEmpty(nextPuzzle.Text))
+        {
+            embed.AddField("📝 Texto", nextPuzzle.Text, false);
+        }
+
+        if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+        {
+            embed.AddField("🖼️ Imagen/Video", nextPuzzle.ImageUrl, false);
+            embed.WithImageUrl(nextPuzzle.ImageUrl);
+        }
+
+        embed.AddField("⚡ Acciones", "Usa los botones para aprobar o rechazar", false);
+
+        var components = new ComponentBuilder()
+            .WithButton("✅ Aprobar", $"puzzle_approve_{nextPuzzle.PuzzleId}", ButtonStyle.Success)
+            .WithButton("❌ Rechazar", $"puzzle_reject_{nextPuzzle.PuzzleId}", ButtonStyle.Danger)
+            .Build();
+
+        await command.RespondAsync(embed: embed.Build(), components: components, ephemeral: true);
+    }
+
+    private async Task HandleFinalizarAdmin(SocketSlashCommand command)
+    {
+        if (_activePuzzle == null)
+        {
+            await command.RespondAsync("No hay ningún puzzle activo para finalizar.", ephemeral: true);
+            return;
+        }
+
+        var puzzleToFinalize = _activePuzzle;
+        Console.WriteLine($"[PUZZLE] Admin force-expired puzzle: {puzzleToFinalize.PuzzleId}");
+
+        // Announce forced expiration in channel
+        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+        if (targetChannel != null)
+        {
+            var embed = new EmbedBuilder()
+                .WithTitle("🛑 Puzzle Finalizado por Admin")
+                .WithDescription("El puzzle activo ha sido finalizado manualmente por un administrador.")
+                .WithColor(Color.Red)
+                .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", puzzleToFinalize.CorrectAnswers), false)
+                .AddField("🏆 Ganadores", puzzleToFinalize.CorrectSolvers.Count > 0 ? 
+                    string.Join(", ", puzzleToFinalize.CorrectSolvers.Select(id => $"<@{id}>")) : "Ninguno", false)
+                .AddField("📊 Estadísticas", 
+                    $"• Ganadores: {puzzleToFinalize.CorrectSolvers.Count}/3\n" +
+                    $"• Intentos totales: {puzzleToFinalize.AttemptedUsers.Count}", false)
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            await targetChannel.SendMessageAsync(embed: embed);
+        }
+
+        _activePuzzle = null;
+        SavePuzzles();
+
+        await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
     }
 }
 
