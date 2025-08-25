@@ -399,12 +399,13 @@ class Bot
                             
                             if (_activePuzzle.CorrectSolvers.Count > 0)
                             {
-                                // At least one person solved it - show as completed
-                                embed.WithTitle("🧩 Puzzle Completado")
-                                    .WithDescription("El puzzle ha expirado después de 24 horas, pero fue resuelto correctamente!")
-                                    .WithColor(Color.Green)
+                                // At least one person solved it - show as expired with winners
+                                embed.WithTitle("⏰ Puzzle Expirado")
+                                    .WithDescription("El puzzle ha expirado después de 24 horas.")
+                                    .WithColor(Color.Orange)
                                     .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
-                                    .AddField("✅ Respuesta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false);
+                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
+                                    .AddField("💰 Recompensa", $"{_puzzleReward} créditos por ganador", false);
                             }
                             else
                             {
