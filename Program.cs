@@ -429,6 +429,57 @@ class Bot
                 });
 
                 _activePuzzle = null;
+                
+                // Auto-approve and activate next puzzle if available
+                if (_pendingPuzzles.Count > 0)
+                {
+                    var nextPuzzle = _pendingPuzzles.Dequeue();
+                    nextPuzzle.IsApproved = true;
+                    nextPuzzle.IsActive = true;
+                    nextPuzzle.ActivatedAt = DateTime.Now;
+                    _activePuzzle = nextPuzzle;
+                    
+                    Console.WriteLine($"[PUZZLE] Auto-approved and activated next puzzle: {nextPuzzle.PuzzleId}");
+                    
+                    // Announce new puzzle in channel
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(2000); // Small delay after expiration announcement
+                            
+                            if (targetChannel != null)
+                            {
+                                var newPuzzleEmbed = new EmbedBuilder()
+                                    .WithTitle("🧩 Nuevo Puzzle Activo")
+                                    .WithDescription("¡Un nuevo puzzle ha sido activado automáticamente!")
+                                    .WithColor(Color.Blue)
+                                    .AddField("🎯 Recompensa", $"{_puzzleReward} créditos", true)
+                                    .AddField("⏱️ Duración", "24 horas", true)
+                                    .WithTimestamp(DateTimeOffset.Now);
+
+                                if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                                {
+                                    newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                                }
+
+                                if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                                {
+                                    newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                                }
+
+                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+
+                                await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error announcing new auto-approved puzzle: {ex.Message}");
+                        }
+                    });
+                }
+                
                 SavePuzzles();
             }
         }
@@ -1989,6 +2040,56 @@ else if (command.Data.Name == "meme")
 
                         _activePuzzle = null;
                         Console.WriteLine("[PUZZLE] Puzzle completed by 3 solvers");
+                        
+                        // Auto-approve and activate next puzzle if available
+                        if (_pendingPuzzles.Count > 0)
+                        {
+                            var nextPuzzle = _pendingPuzzles.Dequeue();
+                            nextPuzzle.IsApproved = true;
+                            nextPuzzle.IsActive = true;
+                            nextPuzzle.ActivatedAt = DateTime.Now;
+                            _activePuzzle = nextPuzzle;
+                            
+                            Console.WriteLine($"[PUZZLE] Auto-approved and activated next puzzle after completion: {nextPuzzle.PuzzleId}");
+                            
+                            // Announce new puzzle in channel after a delay
+                            Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await Task.Delay(3000); // Delay after completion announcement
+                                    
+                                    if (targetChannel != null)
+                                    {
+                                        var newPuzzleEmbed = new EmbedBuilder()
+                                            .WithTitle("🧩 Nuevo Puzzle Activo")
+                                            .WithDescription("¡Un nuevo puzzle ha sido activado automáticamente!")
+                                            .WithColor(Color.Blue)
+                                            .AddField("🎯 Recompensa", $"{_puzzleReward} créditos", true)
+                                            .AddField("⏱️ Duración", "24 horas", true)
+                                            .WithTimestamp(DateTimeOffset.Now);
+
+                                        if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                                        {
+                                            newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                                        }
+
+                                        if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                                        {
+                                            newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                                        }
+
+                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+
+                                        await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error announcing new auto-approved puzzle after completion: {ex.Message}");
+                                }
+                            });
+                        }
                     }
                 }
                 else
