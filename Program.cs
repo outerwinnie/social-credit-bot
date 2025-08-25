@@ -448,6 +448,9 @@ class Bot
                         {
                             await Task.Delay(2000); // Small delay after expiration announcement
                             
+                            var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                            var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                            
                             if (targetChannel != null)
                             {
                                 var newPuzzleEmbed = new EmbedBuilder()
@@ -2058,6 +2061,9 @@ else if (command.Data.Name == "meme")
                                 try
                                 {
                                     await Task.Delay(3000); // Delay after completion announcement
+                                    
+                                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
                                     
                                     if (targetChannel != null)
                                     {
