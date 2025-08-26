@@ -1178,6 +1178,57 @@ private void ScheduleDailyTask()
                 {
                     Console.WriteLine("Quiz image posting is frozen until the first of the month.");
                 }
+                
+                // Check if we need to activate a puzzle (if no active puzzle and puzzles in queue)
+                if (_activePuzzle == null && _pendingPuzzles.Count > 0)
+                {
+                    var nextPuzzle = _pendingPuzzles.Dequeue();
+                    nextPuzzle.IsApproved = true;
+                    nextPuzzle.IsActive = true;
+                    nextPuzzle.ActivatedAt = DateTime.Now;
+                    _activePuzzle = nextPuzzle;
+                    
+                    Console.WriteLine($"[PUZZLE] Daily auto-activated puzzle: {nextPuzzle.PuzzleId}");
+                    SavePuzzles();
+                    
+                    // Announce new puzzle
+                    try
+                    {
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        
+                        if (targetChannel != null)
+                        {
+                            var newPuzzleEmbed = new EmbedBuilder()
+                                .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                                .WithColor(Color.Blue)
+                                .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                .AddField("👥 Límite", "3 ganadores", true)
+                                .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
+                                .AddField("⏱️ Duración", "24 horas", true)
+                                .WithTimestamp(DateTimeOffset.Now);
+
+                            if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                            {
+                                newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                            }
+
+                            if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                            {
+                                newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                            }
+
+                            newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+
+                            await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error announcing daily auto-activated puzzle: {ex.Message}");
+                    }
+                }
             }   
         });
     }
