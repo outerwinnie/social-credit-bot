@@ -454,10 +454,12 @@ class Bot
                             if (targetChannel != null)
                             {
                                 var newPuzzleEmbed = new EmbedBuilder()
-                                    .WithTitle("🧩 Nuevo Puzzle Activo")
-                                    .WithDescription("¡Un nuevo puzzle ha sido activado automáticamente!")
+                                    .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                    .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
                                     .WithColor(Color.Blue)
-                                    .AddField("🎯 Recompensa", $"{_puzzleReward} créditos", true)
+                                    .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                    .AddField("👥 Límite", "3 ganadores", true)
+                                    .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
                                     .AddField("⏱️ Duración", "24 horas", true)
                                     .WithTimestamp(DateTimeOffset.Now);
 
@@ -471,7 +473,7 @@ class Bot
                                     newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                                 }
 
-                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver [respuesta]` para resolverlo", false);
 
                                 await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                             }
@@ -2068,10 +2070,12 @@ else if (command.Data.Name == "meme")
                                     if (targetChannel != null)
                                     {
                                         var newPuzzleEmbed = new EmbedBuilder()
-                                            .WithTitle("🧩 Nuevo Puzzle Activo")
-                                            .WithDescription("¡Un nuevo puzzle ha sido activado automáticamente!")
+                                            .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                            .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
                                             .WithColor(Color.Blue)
-                                            .AddField("🎯 Recompensa", $"{_puzzleReward} créditos", true)
+                                            .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                            .AddField("👥 Límite", "3 ganadores", true)
+                                            .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
                                             .AddField("⏱️ Duración", "24 horas", true)
                                             .WithTimestamp(DateTimeOffset.Now);
 
@@ -2085,7 +2089,7 @@ else if (command.Data.Name == "meme")
                                             newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                                         }
 
-                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver [respuesta]` para resolverlo", false);
 
                                         await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                                     }
