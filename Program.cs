@@ -2000,7 +2000,7 @@ else if (command.Data.Name == "meme")
                 _activePuzzle.AttemptedUsers.Add(userId);
                 var userAnswer = respuestaOption.Value.ToString()!.Trim();
                 var isCorrect = _activePuzzle.CorrectAnswers.Any(answer => 
-                    string.Equals(userAnswer, answer, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(NormalizeText(userAnswer), NormalizeText(answer), StringComparison.OrdinalIgnoreCase));
 
                 if (isCorrect)
                 {
@@ -3347,6 +3347,27 @@ else if (command.Data.Name == "meme")
         SavePuzzles();
 
         await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
+    }
+
+    // Helper method to normalize text by removing accents
+    private static string NormalizeText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        var normalizedString = text.Normalize(NormalizationForm.FormD);
+        var stringBuilder = new StringBuilder();
+
+        foreach (var c in normalizedString)
+        {
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                stringBuilder.Append(c);
+            }
+        }
+
+        return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
     }
 }
 
