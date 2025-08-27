@@ -878,31 +878,40 @@ class Bot
 
     private async Task RegisterSlashCommands()
     {
-        var redeemRecuerdateCommand = new SlashCommandBuilder()
-            .WithName("recuerdate")
-            .WithDescription($"Canjea una recompensa 'Recuerdate' ({_recuerdatePrice})")
+        // Unified /usar command with subcommands
+        var usarCommand = new SlashCommandBuilder()
+            .WithName("usar")
+            .WithDescription("Usa créditos para diferentes acciones")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("accion")
+                .WithDescription("Acción a realizar")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String)
+                .AddChoice("Recuerdate", "recuerdate")
+                .AddChoice("Meme", "meme")
+                .AddChoice("Preguntar", "preguntar")
+                .AddChoice("Regalar", "regalar")
+                .AddChoice("Retar", "retar")
+                .AddChoice("Saldo", "saldo"))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario objetivo (para preguntar, regalar, retar)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.User))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("cantidad")
-                .WithDescription($"Cantidad de 'Recuerdate' a canjear ({_recuerdatePrice} cada)")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
-        
-        var redeemRecuerdateGuildCommand = redeemRecuerdateCommand.Build();
-        await _client.Rest.CreateGuildCommand(redeemRecuerdateGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'recuerdate' registered for the guild.");
-        
-        var redeemMemeCommand = new SlashCommandBuilder()
-            .WithName("meme")
-            .WithDescription($"Canjea una recompensa 'Recuerdate' version meme ({_memePrice})" )
+                .WithDescription("Cantidad (para recuerdate, meme, regalar, retar)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.Integer))
             .AddOption(new SlashCommandOptionBuilder()
-                .WithName("cantidad")
-                .WithDescription($"Cantidad de 'Recuerdate' version meme a canjear ({_memePrice} cada)")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
+                .WithName("pregunta")
+                .WithDescription("Pregunta a realizar (solo para preguntar)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.String));
         
-        var redeemMemeGuildCommand = redeemMemeCommand.Build();
-        await _client.Rest.CreateGuildCommand(redeemMemeGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'meme' registered for the guild.");
+        var usarGuildCommand = usarCommand.Build();
+        await _client.Rest.CreateGuildCommand(usarGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'usar' registered for the guild.");
         
         // Unified admin command with subcommands
         var adminCommand = new SlashCommandBuilder()
@@ -933,23 +942,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(adminGuildCommand, _guildId);
         Console.WriteLine("Slash command 'admin' registered for the guild.");
         
-        var requestChatbotCommand = new SlashCommandBuilder()
-            .WithName("preguntar")
-            .WithDescription($"Realiza una pregunta a el espejismo de un usuario ({_preguntarPrice})")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("Usuario al que preguntar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User))
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("pregunta")
-                .WithDescription("Pregunta a realizar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.String));
-        
-        var requestChatbotGuildCommand = requestChatbotCommand.Build();
-        await _client.Rest.CreateGuildCommand(requestChatbotGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'preguntar' registered for the guild.");
 
         var dailyQuizCommand = new SlashCommandBuilder()
             .WithName("revelar")
@@ -982,51 +974,6 @@ class Bot
         await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
         Console.WriteLine($"Slash command 'votar' registered for the guild.");
 
-        var giftCommand = new SlashCommandBuilder()
-            .WithName("regalar")
-            .WithDescription($"Regala créditos a un usuario")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("Usuario a regalar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User))
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("cantidad")
-                .WithDescription("Cantidad de créditos a regalar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
-        
-        var giftGuildCommand = giftCommand.Build();
-        await _client.Rest.CreateGuildCommand(giftGuildCommand, _guildId);
-        Console.WriteLine($"Slash command 'regalar' registered for the guild.");
-
-        var checkCreditsCommand = new SlashCommandBuilder()
-            .WithName("saldo")
-            .WithDescription("Comprueba tu saldo disponible");
-        
-        var checkCreditsGuildCommand = checkCreditsCommand.Build();
-        await _client.Rest.CreateGuildCommand(checkCreditsGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'saldo' registered for the guild.");
-
-
-        // Retar challenge command
-        var retarCommand = new SlashCommandBuilder()
-            .WithName("retar")
-            .WithDescription("Reta a otro usuario a una apuesta de 'Recuerdate'")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("Usuario a retar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User))
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("creditos")
-                .WithDescription("Cantidad de créditos a apostar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
-        
-        var retarGuildCommand = retarCommand.Build();
-        await _client.Rest.CreateGuildCommand(retarGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'retar' registered for the guild.");
 
 
         // Guess challenge command
@@ -1347,56 +1294,40 @@ private void ScheduleDailyTask()
     {
         if (interaction is SocketSlashCommand command)
         {
-            if (command.Data.Name == "preguntar")
+            if (command.Data.Name == "usar")
             {
-                var requestedUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
-                var pregunta = command.Data.Options.First(opt => opt.Name == "pregunta").Value.ToString();
-                var commanduser = command.User;
-
-                if (commanduser != null && requestedUser == "outerwinnie" || requestedUser == "otromono" || requestedUser == "esguille" ||requestedUser == "falsatortuga" || requestedUser == "potajito" || requestedUser == "deparki" || requestedUser == "casinocaster" )
+                var accionOption = command.Data.Options.FirstOrDefault(o => o.Name == "accion");
+                if (accionOption == null)
                 {
-                    LoadData();
-                    
-                    var userId = commanduser!.Id;
-                    var reactionsReceived = GetUserReactionCount(userId);
-                    if (reactionsReceived >= _preguntarPrice)
-                    {
-                        // Subtract the _preguntarPrice from reactionsReceived
-                        reactionsReceived -= _preguntarPrice;
-                        
-                        Console.WriteLine(reactionsReceived);
-                    
-                        // Update the reaction count
-                        _userReactionCounts[userId] = reactionsReceived;
-                    
-                        // Write the updated count to the CSV file
-                        SaveData();
-                        
-                        // Sending a message to a specific channel
-                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
-                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-                        
-                        if (targetChannel != null)
-                        {
-                            
-                            await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
-                            await targetChannel.SendMessageAsync($"**Pregunta** a {requestedUser}: " + pregunta);
-
-                            // Respond to the interaction
-                            await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
-                        
-                            await SendChatBotRequestAsync(requestedUser);
-                        }
-                    }
-                    else
-                    {
-                        
-                        await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} créditos.", ephemeral: true);
-                    }
+                    await command.RespondAsync("Debes especificar una acción.", ephemeral: true);
+                    return;
                 }
-                else
+
+                string accion = accionOption.Value.ToString()!;
+
+                switch (accion)
                 {
-                    await command.RespondAsync($"Usuario no disponible.", ephemeral: true);
+                    case "recuerdate":
+                        await HandleRecuerdateUsar(command);
+                        break;
+                    case "meme":
+                        await HandleMemeUsar(command);
+                        break;
+                    case "preguntar":
+                        await HandlePreguntarUsar(command);
+                        break;
+                    case "regalar":
+                        await HandleRegalarUsar(command);
+                        break;
+                    case "retar":
+                        await HandleRetarUsar(command);
+                        break;
+                    case "saldo":
+                        await HandleSaldoUsar(command);
+                        break;
+                    default:
+                        await command.RespondAsync("Acción no válida.", ephemeral: true);
+                        break;
                 }
             }
             
@@ -1441,12 +1372,6 @@ private void ScheduleDailyTask()
                 }
             }
 
-            else if (command.Data.Name == "saldo")
-            {
-                var userId = command.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
-            }
 
             else if (command.Data.Name == "revelar")
             {
@@ -1550,71 +1475,6 @@ private void ScheduleDailyTask()
                 }
             }
             
-            else if (command.Data.Name == "recuerdate")
-            {
-                if (IsQuizFreezePeriod())
-                {
-                    await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
-                    return;
-                }
-
-                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
-                
-                // Default multiplier is 1 if "cantidad" is not provided or invalid
-                int multiplier = 1;
-
-                if (amountOption != null && int.TryParse(amountOption.Value?.ToString(), out int parsedMultiplier))
-                {
-                    multiplier = parsedMultiplier;
-                }
-                
-                //Load updated count of the CSV file.
-                LoadData();
-
-                var totalprice = _recuerdatePrice * multiplier;
-
-                var userId = command.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                if (reactionsReceived >= totalprice)
-                {
-                    // Subtract the _recuerdatePrice from reactionsReceived
-                    reactionsReceived -= totalprice;
-                    
-                    // Update the reaction count
-                    _userReactionCounts[userId] = reactionsReceived;
-                    
-                    // Write the updated count to the CSV file
-                    SaveData();
-
-                    // Respond to the interaction
-                    await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
-                        
-                    // Sending a message to a specific channel
-                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
-                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                    if (targetChannel != null)
-                    {
-                        // Sending a message to the specific channel and tagging the user
-                        var userMention = command.User.Mention; // This will mention the user who used the option
-                        await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate' por {totalprice} créditos.");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Could not find the target channel with ID: {channelId}");
-                    }
-
-                    // Run SendPostRequestAsync as many times as specified by the multiplier
-                    for (int i = 0; i < multiplier; i++)
-                    {
-                        await SendPostRequestAsync(reward:"image");
-                    }
-                }
-                else
-                {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
-                }
-            }
             
             else if (command.Data.Name == "votar")
             {
@@ -1676,246 +1536,7 @@ private void ScheduleDailyTask()
                 SaveVotes();
                 await command.RespondAsync($"<@{voterId}> ha votado por <@{votedForId}> con una apuesta de {betAmount}.");
             }
-            else if (command.Data.Name == "regalar")
-{
-    var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-    var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
-
-    if (userOption == null || amountOption == null)
-    {
-        await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
-        return;
-    }
-
-    ulong senderId = command.User.Id;
-    ulong recipientId = (userOption.Value as SocketUser)?.Id ?? 0;
-    int amount = 0;
-    if (!int.TryParse(amountOption.Value?.ToString(), out amount) || amount <= 0)
-    {
-        await command.RespondAsync("La cantidad debe ser un numero positivo.", ephemeral: true);
-        return;
-    }
-    if (recipientId == 0)
-    {
-        await command.RespondAsync("Usuario destino invalido.", ephemeral: true);
-        return;
-    }
-    if (senderId == recipientId)
-    {
-        await command.RespondAsync("No puedes regalarte créditos a ti mismo.", ephemeral: true);
-        return;
-    }
-
-    LoadData();
-    if (!_userReactionCounts.ContainsKey(senderId) || _userReactionCounts[senderId] < amount)
-    {
-        await command.RespondAsync($"No tienes suficientes créditos para regalar {amount}.", ephemeral: true);
-        return;
-    }
-
-    // Subtract from sender
-    _userReactionCounts[senderId] -= amount;
-    // Add to recipient
-    if (!_userReactionCounts.ContainsKey(recipientId))
-        _userReactionCounts[recipientId] = 0;
-    _userReactionCounts[recipientId] += amount;
-    SaveData();
-
-    // Confirmation to sender
-    await command.RespondAsync($"Has regalado {amount} créditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
-
-    // Notify recipient in channel
-    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-    if (targetChannel != null)
-    {
-        await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
-    }
-
-    Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} créditos");
-}
-else if (command.Data.Name == "meme")
-            {
-                var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
-                
-                // Default multiplier is 1 if "cantidad" is not provided or invalid
-                int multiplier = 1;
-
-                if (amountOption != null && int.TryParse(amountOption.Value?.ToString(), out int parsedMultiplier))
-                {
-                    multiplier = parsedMultiplier;
-                }
-                
-                //Load updated count of the CSV file.
-                LoadData();
-
-                var totalprice = _memePrice * multiplier;
-
-                var userId = command.User.Id;
-                var reactionsReceived = GetUserReactionCount(userId);
-                if (reactionsReceived >= totalprice)
-                {
-                    // Subtract the _recuerdatePrice from reactionsReceived
-                    reactionsReceived -= totalprice;
-                    
-                    // Update the reaction count
-                    _userReactionCounts[userId] = reactionsReceived;
-                    
-                    // Write the updated count to the CSV file
-                    SaveData();
-
-                    // Respond to the interaction
-                    await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
-                        
-                    // Sending a message to a specific channel
-                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
-                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                    if (targetChannel != null)
-                    {
-                        // Sending a message to the specific channel and tagging the user
-                        var userMention = command.User.Mention; // This will mention the user who used the option
-                        await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate version meme' por {totalprice} créditos.");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Could not find the target channel with ID: {channelId}");
-                    }
-
-                    // Run SendPostRequestAsync as many times as specified by the multiplier
-                    for (int i = 0; i < multiplier; i++)
-                    {
-                        await SendPostRequestAsync(reward:"meme");
-                    }
-                }
-                else
-                {
-                    await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
-                }
-            }
-            else if (command.Data.Name == "retar")
-            {
-                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-                var creditosOption = command.Data.Options.FirstOrDefault(o => o.Name == "creditos");
-
-                if (userOption == null || creditosOption == null)
-                {
-                    await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
-                    return;
-                }
-
-                var challengedUser = userOption.Value as SocketUser;
-                if (challengedUser == null)
-                {
-                    await command.RespondAsync("Usuario inválido.", ephemeral: true);
-                    return;
-                }
-
-                if (!int.TryParse(creditosOption.Value?.ToString(), out int betAmount) || betAmount <= 0)
-                {
-                    await command.RespondAsync("La cantidad de créditos debe ser un número positivo.", ephemeral: true);
-                    return;
-                }
-
-                ulong challengerId = command.User.Id;
-                ulong challengedId = challengedUser.Id;
-
-                if (challengerId == challengedId)
-                {
-                    await command.RespondAsync("No puedes retarte a ti mismo.", ephemeral: true);
-                    return;
-                }
-
-                // Check if challenger has enough credits
-                LoadData();
-                if (!_userReactionCounts.ContainsKey(challengerId) || _userReactionCounts[challengerId] < betAmount)
-                {
-                    await command.RespondAsync($"No tienes suficientes créditos. Necesitas {betAmount} créditos para esta apuesta.", ephemeral: true);
-                    return;
-                }
-
-                // Check if challenged user has enough credits
-                if (!_userReactionCounts.ContainsKey(challengedId) || _userReactionCounts[challengedId] < betAmount)
-                {
-                    await command.RespondAsync($"<@{challengedId}> no tiene suficientes créditos para aceptar esta apuesta.", ephemeral: true);
-                    return;
-                }
-
-                // Check for existing active challenges between these users
-                var existingChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
-                    (c.ChallengerId == challengerId && c.ChallengedId == challengedId) ||
-                    (c.ChallengerId == challengedId && c.ChallengedId == challengerId));
-
-                if (existingChallenge != null && !existingChallenge.IsCompleted)
-                {
-                    await command.RespondAsync("Ya existe un reto activo entre ustedes. Completen el reto actual antes de crear uno nuevo.", ephemeral: true);
-                    return;
-                }
-
-                // Create new challenge
-                string challengeId = Guid.NewGuid().ToString();
-                var challenge = new RetarChallenge
-                {
-                    ChallengeId = challengeId,
-                    ChallengerId = challengerId,
-                    ChallengedId = challengedId,
-                    BetAmount = betAmount,
-                    CurrentBetAmount = betAmount,
-                    CreatedAt = DateTime.Now,
-                    IsAccepted = false,
-                    IsCompleted = false,
-                    CurrentRound = 1,
-                    RoundGuesses = new Dictionary<int, Dictionary<ulong, string>>(),
-                    WaitingForBothGuesses = false
-                };
-
-                _activeRetarChallenges[challengeId] = challenge;
-                SaveRetarChallenges();
-
-                // Send challenge message to target channel with buttons
-                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                if (targetChannel != null)
-                {
-                    var embed = new EmbedBuilder()
-                        .WithTitle("🎯 ¡Nuevo Reto!")
-                        .WithDescription($"<@{challengerId}> ha retado a <@{challengedId}> a una apuesta de **{betAmount} créditos**!")
-                        .WithColor(Color.Orange)
-                        .AddField("💰 Apuesta", $"{betAmount} créditos", true)
-                        .AddField("⏰ Expira en", "24 horas", true)
-                        .AddField("📝 Instrucciones", 
-                            $"<@{challengedId}> puede usar los botones de abajo para responder", false)
-                        .WithTimestamp(DateTimeOffset.Now)
-                        .Build();
-
-                    var acceptButton = new ButtonBuilder()
-                        .WithLabel("✅ Acepto")
-                        .WithStyle(ButtonStyle.Success)
-                        .WithCustomId($"accept_challenge_{challengeId}");
-
-                    var rejectButton = new ButtonBuilder()
-                        .WithLabel("❌ Rechazo")
-                        .WithStyle(ButtonStyle.Danger)
-                        .WithCustomId($"reject_challenge_{challengeId}");
-
-                    var buttonComponent = new ComponentBuilder()
-                        .WithButton(acceptButton)
-                        .WithButton(rejectButton)
-                        .Build();
-
-                    var message = await targetChannel.SendMessageAsync(embed: embed, components: buttonComponent);
-                    
-                    // Store message info for later button removal
-                    challenge.MessageId = message.Id;
-                    challenge.ChannelId = channelId;
-                    SaveRetarChallenges();
-                }
-
-                await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
-                Console.WriteLine($"[RETAR] Challenge created: {challengerId} -> {challengedId} for {betAmount} credits");
-            }
-            else if (command.Data.Name == "adivino")
+                        else if (command.Data.Name == "adivino")
             {
                 var userId = command.User.Id;
                 var guessedUser = (IUser)command.Data.Options.First().Value;
@@ -3402,6 +3023,384 @@ else if (command.Data.Name == "meme")
         SavePuzzles();
 
         await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
+    }
+
+    // Helper methods for /usar subcommands
+    private async Task HandleRecuerdateUsar(SocketSlashCommand command)
+    {
+        if (IsQuizFreezePeriod())
+        {
+            await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+            return;
+        }
+
+        var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+        
+        // Default multiplier is 1 if "cantidad" is not provided or invalid
+        int multiplier = 1;
+
+        if (amountOption != null && int.TryParse(amountOption.Value?.ToString(), out int parsedMultiplier))
+        {
+            multiplier = parsedMultiplier;
+        }
+        
+        //Load updated count of the CSV file.
+        LoadData();
+
+        var totalprice = _recuerdatePrice * multiplier;
+
+        var userId = command.User.Id;
+        var reactionsReceived = GetUserReactionCount(userId);
+        if (reactionsReceived >= totalprice)
+        {
+            // Subtract the _recuerdatePrice from reactionsReceived
+            reactionsReceived -= totalprice;
+            
+            // Update the reaction count
+            _userReactionCounts[userId] = reactionsReceived;
+            
+            // Write the updated count to the CSV file
+            SaveData();
+
+            // Respond to the interaction
+            await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                
+            // Sending a message to a specific channel
+            var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+            var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+            if (targetChannel != null)
+            {
+                // Sending a message to the specific channel and tagging the user
+                var userMention = command.User.Mention; // This will mention the user who used the option
+                await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate' por {totalprice} créditos.");
+            }
+            else
+            {
+                Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+            }
+
+            // Run SendPostRequestAsync as many times as specified by the multiplier
+            for (int i = 0; i < multiplier; i++)
+            {
+                await SendPostRequestAsync(reward:"image");
+            }
+        }
+        else
+        {
+            await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
+        }
+    }
+
+    private async Task HandleMemeUsar(SocketSlashCommand command)
+    {
+        var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+        
+        // Default multiplier is 1 if "cantidad" is not provided or invalid
+        int multiplier = 1;
+
+        if (amountOption != null && int.TryParse(amountOption.Value?.ToString(), out int parsedMultiplier))
+        {
+            multiplier = parsedMultiplier;
+        }
+        
+        //Load updated count of the CSV file.
+        LoadData();
+
+        var totalprice = _memePrice * multiplier;
+
+        var userId = command.User.Id;
+        var reactionsReceived = GetUserReactionCount(userId);
+        if (reactionsReceived >= totalprice)
+        {
+            // Subtract the _recuerdatePrice from reactionsReceived
+            reactionsReceived -= totalprice;
+            
+            // Update the reaction count
+            _userReactionCounts[userId] = reactionsReceived;
+            
+            // Write the updated count to the CSV file
+            SaveData();
+
+            // Respond to the interaction
+            await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                
+            // Sending a message to a specific channel
+            var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+            var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+            if (targetChannel != null)
+            {
+                // Sending a message to the specific channel and tagging the user
+                var userMention = command.User.Mention; // This will mention the user who used the option
+                await targetChannel.SendMessageAsync($"{userMention} ha canjeado {multiplier} 'Recuerdate version meme' por {totalprice} créditos.");
+            }
+            else
+            {
+                Console.WriteLine($"Could not find the target channel with ID: {channelId}");
+            }
+
+            // Run SendPostRequestAsync as many times as specified by the multiplier
+            for (int i = 0; i < multiplier; i++)
+            {
+                await SendPostRequestAsync(reward:"meme");
+            }
+        }
+        else
+        {
+            await command.RespondAsync($"No tienes suficiente credito social. Necesitas {totalprice} créditos.", ephemeral: true);
+        }
+    }
+
+    private async Task HandlePreguntarUsar(SocketSlashCommand command)
+    {
+        var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+        var preguntaOption = command.Data.Options.FirstOrDefault(o => o.Name == "pregunta");
+
+        if (userOption == null || preguntaOption == null)
+        {
+            await command.RespondAsync("Faltan argumentos. Debes especificar usuario y pregunta.", ephemeral: true);
+            return;
+        }
+
+        var requestedUser = userOption.Value.ToString();
+        var pregunta = preguntaOption.Value.ToString();
+        var commanduser = command.User;
+
+        if (commanduser != null && requestedUser == "outerwinnie" || requestedUser == "otromono" || requestedUser == "esguille" ||requestedUser == "falsatortuga" || requestedUser == "potajito" || requestedUser == "deparki" || requestedUser == "casinocaster" )
+        {
+            LoadData();
+            
+            var userId = commanduser!.Id;
+            var reactionsReceived = GetUserReactionCount(userId);
+            if (reactionsReceived >= _preguntarPrice)
+            {
+                // Subtract the _preguntarPrice from reactionsReceived
+                reactionsReceived -= _preguntarPrice;
+                
+                Console.WriteLine(reactionsReceived);
+            
+                // Update the reaction count
+                _userReactionCounts[userId] = reactionsReceived;
+            
+                // Write the updated count to the CSV file
+                SaveData();
+                
+                // Sending a message to a specific channel
+                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? ""); // Replace with your channel ID if not using env var
+                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                
+                if (targetChannel != null)
+                {
+                    
+                    await targetChannel.SendMessageAsync($"{commanduser.Mention} ha canjeado una nueva recompensa 'Consulta' por { _preguntarPrice} créditos.");
+                    await targetChannel.SendMessageAsync($"**Pregunta** a {requestedUser}: " + pregunta);
+
+                    // Respond to the interaction
+                    await command.RespondAsync("Créditos restantes: " + reactionsReceived, ephemeral: true);
+                
+                    await SendChatBotRequestAsync(requestedUser);
+                }
+            }
+            else
+            {
+                
+                await command.RespondAsync($"No tienes suficiente credito social. Necesitas {_preguntarPrice} créditos.", ephemeral: true);
+            }
+        }
+        else
+        {
+            await command.RespondAsync($"Usuario no disponible.", ephemeral: true);
+        }
+    }
+
+    private async Task HandleRegalarUsar(SocketSlashCommand command)
+    {
+        var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+        var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+        if (userOption == null || amountOption == null)
+        {
+            await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
+            return;
+        }
+
+        ulong senderId = command.User.Id;
+        ulong recipientId = (userOption.Value as SocketUser)?.Id ?? 0;
+        int amount = 0;
+        if (!int.TryParse(amountOption.Value?.ToString(), out amount) || amount <= 0)
+        {
+            await command.RespondAsync("La cantidad debe ser un numero positivo.", ephemeral: true);
+            return;
+        }
+        if (recipientId == 0)
+        {
+            await command.RespondAsync("Usuario destino invalido.", ephemeral: true);
+            return;
+        }
+        if (senderId == recipientId)
+        {
+            await command.RespondAsync("No puedes regalarte créditos a ti mismo.", ephemeral: true);
+            return;
+        }
+
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(senderId) || _userReactionCounts[senderId] < amount)
+        {
+            await command.RespondAsync($"No tienes suficientes créditos para regalar {amount}.", ephemeral: true);
+            return;
+        }
+
+        // Subtract from sender
+        _userReactionCounts[senderId] -= amount;
+        // Add to recipient
+        if (!_userReactionCounts.ContainsKey(recipientId))
+            _userReactionCounts[recipientId] = 0;
+        _userReactionCounts[recipientId] += amount;
+        SaveData();
+
+        // Confirmation to sender
+        await command.RespondAsync($"Has regalado {amount} créditos a <@{recipientId}>. Tu saldo restante: {_userReactionCounts[senderId]}", ephemeral: true);
+
+        // Notify recipient in channel
+        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+        if (targetChannel != null)
+        {
+            await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
+        }
+
+        Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} créditos");
+    }
+
+    private async Task HandleRetarUsar(SocketSlashCommand command)
+    {
+        var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+        var creditosOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+        if (userOption == null || creditosOption == null)
+        {
+            await command.RespondAsync("Faltan argumentos. Debes especificar usuario y créditos.", ephemeral: true);
+            return;
+        }
+
+        var challengedUser = userOption.Value as SocketUser;
+        if (challengedUser == null)
+        {
+            await command.RespondAsync("Usuario inválido.", ephemeral: true);
+            return;
+        }
+
+        if (!int.TryParse(creditosOption.Value?.ToString(), out int betAmount) || betAmount <= 0)
+        {
+            await command.RespondAsync("La cantidad de créditos debe ser un número positivo.", ephemeral: true);
+            return;
+        }
+
+        ulong challengerId = command.User.Id;
+        ulong challengedId = challengedUser.Id;
+
+        if (challengerId == challengedId)
+        {
+            await command.RespondAsync("No puedes retarte a ti mismo.", ephemeral: true);
+            return;
+        }
+
+        // Check if challenger has enough credits
+        LoadData();
+        if (!_userReactionCounts.ContainsKey(challengerId) || _userReactionCounts[challengerId] < betAmount)
+        {
+            await command.RespondAsync($"No tienes suficientes créditos. Necesitas {betAmount} créditos para esta apuesta.", ephemeral: true);
+            return;
+        }
+
+        // Check if challenged user has enough credits
+        if (!_userReactionCounts.ContainsKey(challengedId) || _userReactionCounts[challengedId] < betAmount)
+        {
+            await command.RespondAsync($"<@{challengedId}> no tiene suficientes créditos para aceptar esta apuesta.", ephemeral: true);
+            return;
+        }
+
+        // Check for existing active challenges between these users
+        var existingChallenge = _activeRetarChallenges.Values.FirstOrDefault(c => 
+            (c.ChallengerId == challengerId && c.ChallengedId == challengedId) ||
+            (c.ChallengerId == challengedId && c.ChallengedId == challengerId));
+
+        if (existingChallenge != null && !existingChallenge.IsCompleted)
+        {
+            await command.RespondAsync("Ya existe un reto activo entre ustedes. Completen el reto actual antes de crear uno nuevo.", ephemeral: true);
+            return;
+        }
+
+        // Create new challenge
+        string challengeId = Guid.NewGuid().ToString();
+        var challenge = new RetarChallenge
+        {
+            ChallengeId = challengeId,
+            ChallengerId = challengerId,
+            ChallengedId = challengedId,
+            BetAmount = betAmount,
+            CurrentBetAmount = betAmount,
+            CreatedAt = DateTime.Now,
+            IsAccepted = false,
+            IsCompleted = false,
+            CurrentRound = 1,
+            RoundGuesses = new Dictionary<int, Dictionary<ulong, string>>(),
+            WaitingForBothGuesses = false
+        };
+
+        _activeRetarChallenges[challengeId] = challenge;
+        SaveRetarChallenges();
+
+        // Send challenge message to target channel with buttons
+        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+        if (targetChannel != null)
+        {
+            var embed = new EmbedBuilder()
+                .WithTitle("🎯 ¡Nuevo Reto!")
+                .WithDescription($"<@{challengerId}> ha retado a <@{challengedId}> a una apuesta de **{betAmount} créditos**!")
+                .WithColor(Color.Orange)
+                .AddField("💰 Apuesta", $"{betAmount} créditos", true)
+                .AddField("⏰ Expira en", "24 horas", true)
+                .AddField("📝 Instrucciones", 
+                    $"<@{challengedId}> puede usar los botones de abajo para responder", false)
+                .WithTimestamp(DateTimeOffset.Now)
+                .Build();
+
+            var acceptButton = new ButtonBuilder()
+                .WithLabel("✅ Acepto")
+                .WithStyle(ButtonStyle.Success)
+                .WithCustomId($"accept_challenge_{challengeId}");
+
+            var rejectButton = new ButtonBuilder()
+                .WithLabel("❌ Rechazo")
+                .WithStyle(ButtonStyle.Danger)
+                .WithCustomId($"reject_challenge_{challengeId}");
+
+            var buttonComponent = new ComponentBuilder()
+                .WithButton(acceptButton)
+                .WithButton(rejectButton)
+                .Build();
+
+            var message = await targetChannel.SendMessageAsync(embed: embed, components: buttonComponent);
+            
+            // Store message info for later button removal
+            challenge.MessageId = message.Id;
+            challenge.ChannelId = channelId;
+            SaveRetarChallenges();
+        }
+
+        await command.RespondAsync($"¡Reto enviado! <@{challengedId}> tiene 24 horas para aceptar o rechazar tu desafío de {betAmount} créditos.", ephemeral: true);
+        Console.WriteLine($"[RETAR] Challenge created: {challengerId} -> {challengedId} for {betAmount} credits");
+    }
+
+    private async Task HandleSaldoUsar(SocketSlashCommand command)
+    {
+        var userId = command.User.Id;
+        var reactionsReceived = GetUserReactionCount(userId);
+        await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
     }
 
     // Helper method to normalize text by removing accents
