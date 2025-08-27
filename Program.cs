@@ -882,7 +882,6 @@ class Bot
         var usarCommand = new SlashCommandBuilder()
             .WithName("usar")
             .WithDescription("Usa créditos para diferentes acciones")
-            .AddOption(new SlashCommandOptionBuilder()
                 .WithName("accion")
                 .WithDescription("Acción a realizar")
                 .WithRequired(true)
@@ -943,18 +942,26 @@ class Bot
         Console.WriteLine("Slash command 'admin' registered for the guild.");
         
 
-        var dailyQuizCommand = new SlashCommandBuilder()
-            .WithName("revelar")
-            .WithDescription($"Revela a el usuario que compartio la imagen originalmente")
+        // Merged participation command
+        var participarCommand = new SlashCommandBuilder()
+            .WithName("participar")
+            .WithDescription("Participa en juegos del bot")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("accion")
+                .WithDescription("Tipo de participación")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String)
+                .AddChoice("Revelar usuario de imagen diaria", "revelar")
+                .AddChoice("Adivinar en reto activo", "adivino"))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
-                .WithDescription("Usuario a revelar")
+                .WithDescription("Usuario a seleccionar")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.User));
         
-        var dailyQuizGuildCommand = dailyQuizCommand.Build();
-        await _client.Rest.CreateGuildCommand(dailyQuizGuildCommand, _guildId);
-        Console.WriteLine($"Slash command 'revelar' registered for the guild.");
+        var participarGuildCommand = participarCommand.Build();
+        await _client.Rest.CreateGuildCommand(participarGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'participar' registered for the guild.");
 
         var voteCommand = new SlashCommandBuilder()
             .WithName("votar")
@@ -973,22 +980,6 @@ class Bot
         var voteGuildCommand = voteCommand.Build();
         await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
         Console.WriteLine($"Slash command 'votar' registered for the guild.");
-
-
-
-        // Guess challenge command
-        var adivinoCommand = new SlashCommandBuilder()
-            .WithName("adivino")
-            .WithDescription("Adivina quien compartio la imagen en tu reto activo")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("Usuario que crees que compartio la imagen")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User));
-        
-        var adivinoGuildCommand = adivinoCommand.Build();
-        await _client.Rest.CreateGuildCommand(adivinoGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'adivino' registered for the guild.");
 
         // Puzzle creation command
         var puzzleCommand = new SlashCommandBuilder()
@@ -1373,105 +1364,28 @@ private void ScheduleDailyTask()
             }
 
 
-            else if (command.Data.Name == "revelar")
+            else if (command.Data.Name == "participar")
             {
-                Console.WriteLine($"[DEBUG] /revelar command called by user {command.User.Id}");
-                Console.WriteLine($"[DEBUG] Current _uploader value: '{_uploader}'");
-                Console.WriteLine($"[DEBUG] _uploader == string.Empty: {_uploader == string.Empty}");
-                Console.WriteLine($"[DEBUG] string.IsNullOrEmpty(_uploader): {string.IsNullOrEmpty(_uploader)}");
-                
-                if (IsQuizFreezePeriod())
+                var accionOption = command.Data.Options.FirstOrDefault(o => o.Name == "accion");
+                if (accionOption == null)
                 {
-                    await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+                    await command.RespondAsync("Debes especificar una acción.", ephemeral: true);
                     return;
                 }
 
-                if (_uploader == string.Empty)
+                string accion = accionOption.Value.ToString()!;
+
+                switch (accion)
                 {
-                    Console.WriteLine("[DEBUG] _uploader is empty, sending error message");
-                    await command.RespondAsync("La imagen aun no ha sido enviada, espera a que se envie y vuelve a intentarlo.", ephemeral: true);
-                    return;
-                }
-                
-                var userId = command.User.Id;
-                if (_revelarTriedUsers.Contains(userId) || _revelarCorrectUsers.Contains(userId))
-                {
-                    await command.RespondAsync("Ya has intentado revelar al posteador de esta imagen.", ephemeral: true);
-                    return;
-                }
-                _revelarTriedUsers.Add(userId);
-                Console.WriteLine($"[DEBUG] User {userId} added to _revelarTriedUsers. Saving quiz state...");
-                SaveQuizState();
-                Console.WriteLine($"[DEBUG] Quiz state saved after user {userId} failed quiz.");
-                var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
-
-                if (_uploader == choosenUser)
-                {
-                    if (_revelarCorrectUsers.Count >= 3)
-                    {
-                        await command.RespondAsync("Ya hay 3 ganadores para esta ronda. Espera la siguiente imagen para participar de nuevo.", ephemeral: true);
-                        return;
-                    }
-
-                    int reward;
-                    if (_revelarCorrectUsers.Count == 0)
-                        reward = _dailyQuizReward_1;
-                    else if (_revelarCorrectUsers.Count == 1)
-                        reward = _dailyQuizReward_2;
-                    else
-                        reward = _dailyQuizReward_3;
-
-                    _revelarCorrectUsers.Add(userId);
-
-                    await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
-
-                    if (userId != 0)
-                    {
-                        LoadData();
-                        // Add credits to the user
-                        if (!_userReactionCounts.ContainsKey(userId))
-                        {
-                            _userReactionCounts[userId] = 0;
-                        }
-                        _userReactionCounts[userId] += reward;
-                        SaveData(); // Save updated data to CSV
-
-                        // Update leaderboard
-                        if (_revelarLeaderboard.ContainsKey(userId))
-                            _revelarLeaderboard[userId]++;
-                        else
-                            _revelarLeaderboard[userId] = 1;
-                        SaveRevelarLeaderboard();
-                        SaveQuizState(); // Save quiz state after correct answer
-                    }
-
-                    // After rewarding, check if this was the third winner
-                    if (_revelarCorrectUsers.Count == 3)
-                    {
-                        // Announce new round and send new image
-                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-                        if (targetChannel != null)
-                        {
-                            await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
-                        }
-                        if (!IsQuizFreezePeriod())
-                        {
-                            await SendPostRequestAsync("image");
-                        }
-                        else
-                        {
-                            if (targetChannel != null)
-                            {
-                                await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
-                            }
-                        }
-                        SaveQuizState(); // Save after new round/image
-                    }
-                }
-                else
-                {
-                    await command.RespondAsync($"<@{userId}> ¡Incorrecto!");
+                    case "revelar":
+                        await HandleRevelarParticipation(command);
+                        break;
+                    case "adivino":
+                        await HandleAdivinoParticipation(command);
+                        break;
+                    default:
+                        await command.RespondAsync("Acción no válida.", ephemeral: true);
+                        break;
                 }
             }
             
@@ -1535,59 +1449,6 @@ private void ScheduleDailyTask()
                 }
                 SaveVotes();
                 await command.RespondAsync($"<@{voterId}> ha votado por <@{votedForId}> con una apuesta de {betAmount}.");
-            }
-                        else if (command.Data.Name == "adivino")
-            {
-                var userId = command.User.Id;
-                var guessedUser = (IUser)command.Data.Options.First().Value;
-                var guessedUsername = guessedUser.Username;
-
-                // Find most recent active challenge where this user is a participant
-                var challenge = _activeRetarChallenges.Values
-                    .Where(c => (c.ChallengerId == userId || c.ChallengedId == userId) && 
-                               c.IsAccepted && !c.IsCompleted)
-                    .OrderByDescending(c => c.AcceptedAt)
-                    .FirstOrDefault();
-
-                if (challenge == null)
-                {
-                    await command.RespondAsync("No tienes ningún reto activo para adivinar.", ephemeral: true);
-                    return;
-                }
-
-                // Initialize round guesses if not exists
-                if (!challenge.RoundGuesses.ContainsKey(challenge.CurrentRound))
-                {
-                    challenge.RoundGuesses[challenge.CurrentRound] = new Dictionary<ulong, string>();
-                }
-
-                // Check if user already guessed in this round
-                if (challenge.RoundGuesses[challenge.CurrentRound].ContainsKey(userId))
-                {
-                    await command.RespondAsync($"Ya has hecho tu intento en la Ronda {challenge.CurrentRound}.", ephemeral: true);
-                    return;
-                }
-
-                // Store the guess
-                challenge.RoundGuesses[challenge.CurrentRound][userId] = guessedUsername;
-                SaveRetarChallenges();
-
-                await command.RespondAsync($"📝 Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
-
-                // Send notification to channel
-                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-                
-
-                // Check if both players have guessed
-                var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
-                bool bothGuessed = currentRoundGuesses.ContainsKey(challenge.ChallengerId) && 
-                                  currentRoundGuesses.ContainsKey(challenge.ChallengedId);
-
-                if (bothGuessed && targetChannel != null)
-                {
-                    await EvaluateRoundFromSlashCommand(targetChannel, challenge, challenge.ChallengeId);
-                }
             }
             else if (command.Data.Name == "puzzle")
             {
@@ -3422,6 +3283,162 @@ private void ScheduleDailyTask()
         }
 
         return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
+    }
+
+    private async Task HandleRevelarParticipation(SocketSlashCommand command)
+    {
+        Console.WriteLine($"[DEBUG] /participar revelar command called by user {command.User.Id}");
+        Console.WriteLine($"[DEBUG] Current _uploader value: '{_uploader}'");
+        Console.WriteLine($"[DEBUG] _uploader == string.Empty: {_uploader == string.Empty}");
+        Console.WriteLine($"[DEBUG] string.IsNullOrEmpty(_uploader): {string.IsNullOrEmpty(_uploader)}");
+        
+        if (IsQuizFreezePeriod())
+        {
+            await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+            return;
+        }
+
+        if (_uploader == string.Empty)
+        {
+            Console.WriteLine("[DEBUG] _uploader is empty, sending error message");
+            await command.RespondAsync("La imagen aun no ha sido enviada, espera a que se envie y vuelve a intentarlo.", ephemeral: true);
+            return;
+        }
+        
+        var userId = command.User.Id;
+        if (_revelarTriedUsers.Contains(userId) || _revelarCorrectUsers.Contains(userId))
+        {
+            await command.RespondAsync("Ya has intentado revelar al posteador de esta imagen.", ephemeral: true);
+            return;
+        }
+        _revelarTriedUsers.Add(userId);
+        Console.WriteLine($"[DEBUG] User {userId} added to _revelarTriedUsers. Saving quiz state...");
+        SaveQuizState();
+        Console.WriteLine($"[DEBUG] Quiz state saved after user {userId} failed quiz.");
+        var choosenUser = command.Data.Options.First(opt => opt.Name == "usuario").Value.ToString();
+
+        if (_uploader == choosenUser)
+        {
+            if (_revelarCorrectUsers.Count >= 3)
+            {
+                await command.RespondAsync("Ya hay 3 ganadores para esta ronda. Espera la siguiente imagen para participar de nuevo.", ephemeral: true);
+                return;
+            }
+
+            int reward;
+            if (_revelarCorrectUsers.Count == 0)
+                reward = _dailyQuizReward_1;
+            else if (_revelarCorrectUsers.Count == 1)
+                reward = _dailyQuizReward_2;
+            else
+                reward = _dailyQuizReward_3;
+
+            _revelarCorrectUsers.Add(userId);
+
+            await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
+
+            if (userId != 0)
+            {
+                LoadData();
+                // Add credits to the user
+                if (!_userReactionCounts.ContainsKey(userId))
+                {
+                    _userReactionCounts[userId] = 0;
+                }
+                _userReactionCounts[userId] += reward;
+                SaveData(); // Save updated data to CSV
+
+                // Update leaderboard
+                if (_revelarLeaderboard.ContainsKey(userId))
+                    _revelarLeaderboard[userId]++;
+                else
+                    _revelarLeaderboard[userId] = 1;
+                SaveRevelarLeaderboard();
+                SaveQuizState(); // Save quiz state after correct answer
+            }
+
+            // After rewarding, check if this was the third winner
+            if (_revelarCorrectUsers.Count == 3)
+            {
+                // Announce new round and send new image
+                var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                if (targetChannel != null)
+                {
+                    await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
+                }
+                if (!IsQuizFreezePeriod())
+                {
+                    await SendPostRequestAsync("image");
+                }
+                else
+                {
+                    if (targetChannel != null)
+                    {
+                        await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
+                    }
+                }
+                SaveQuizState(); // Save after new round/image
+            }
+        }
+        else
+        {
+            await command.RespondAsync($"<@{userId}> ¡Incorrecto!");
+        }
+    }
+
+    private async Task HandleAdivinoParticipation(SocketSlashCommand command)
+    {
+        var userId = command.User.Id;
+        var guessedUser = (IUser)command.Data.Options.First(opt => opt.Name == "usuario").Value;
+        var guessedUsername = guessedUser.Username;
+
+        // Find most recent active challenge where this user is a participant
+        var challenge = _activeRetarChallenges.Values
+            .Where(c => (c.ChallengerId == userId || c.ChallengedId == userId) && 
+                       c.IsAccepted && !c.IsCompleted)
+            .OrderByDescending(c => c.AcceptedAt)
+            .FirstOrDefault();
+
+        if (challenge == null)
+        {
+            await command.RespondAsync("No tienes ningún reto activo para adivinar.", ephemeral: true);
+            return;
+        }
+
+        // Initialize round guesses if not exists
+        if (!challenge.RoundGuesses.ContainsKey(challenge.CurrentRound))
+        {
+            challenge.RoundGuesses[challenge.CurrentRound] = new Dictionary<ulong, string>();
+        }
+
+        // Check if user already guessed in this round
+        if (challenge.RoundGuesses[challenge.CurrentRound].ContainsKey(userId))
+        {
+            await command.RespondAsync($"Ya has hecho tu intento en la Ronda {challenge.CurrentRound}.", ephemeral: true);
+            return;
+        }
+
+        // Store the guess
+        challenge.RoundGuesses[challenge.CurrentRound][userId] = guessedUsername;
+        SaveRetarChallenges();
+
+        await command.RespondAsync($"📝 Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
+
+        // Send notification to channel
+        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+        
+
+        // Check if both players have guessed
+        var currentRoundGuesses = challenge.RoundGuesses[challenge.CurrentRound];
+        bool bothGuessed = currentRoundGuesses.ContainsKey(challenge.ChallengerId) && 
+                          currentRoundGuesses.ContainsKey(challenge.ChallengedId);
+
+        if (bothGuessed && targetChannel != null)
+        {
+            await EvaluateRoundFromSlashCommand(targetChannel, challenge, challenge.ChallengeId);
+        }
     }
 }
 
