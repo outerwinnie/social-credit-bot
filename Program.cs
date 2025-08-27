@@ -473,7 +473,7 @@ class Bot
                                     newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                                 }
 
-                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver [respuesta]` para resolverlo", false);
+                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar [Resolver el puzzle activo] [respuesta]` para resolverlo", false);
 
                                 await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                             }
@@ -1137,7 +1137,7 @@ private void ScheduleDailyTask()
                                 newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                             }
 
-                            newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+                            newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar [Resolver el puzzle activo] [respuesta]` para resolverlo", false);
 
                             await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                         }
@@ -1545,7 +1545,7 @@ private void ScheduleDailyTask()
                                             newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                                         }
 
-                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar resolver [respuesta]` para resolverlo", false);
+                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar [Resolver el puzzle activo] [respuesta]` para resolverlo", false);
 
                                         await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                                     }
@@ -1647,7 +1647,7 @@ private void ScheduleDailyTask()
                             embed.WithImageUrl(targetPuzzle.ImageUrl);
                         }
 
-                        embed.AddField("📝 Cómo resolver", "Usa `/resolver [respuesta]` para participar", false)
+                        embed.AddField("📝 Cómo resolver", "Usa `/participar [Resolver el puzzle activo] [respuesta]` para participar", false)
                              .WithTimestamp(DateTimeOffset.Now);
 
                         await targetChannel.SendMessageAsync(embed: embed.Build());
@@ -1779,7 +1779,7 @@ private void ScheduleDailyTask()
                     "• La apuesta se multiplica cada ronda\n" +
                     "• El ganador se lleva todos los créditos", false)
                 .AddField("📝 Cómo jugar", 
-                    $"Usen 'adivino {challengeId} [respuesta]' para participar", false)
+                    $"Usen `/participar [Responder al reto activo] [usuario]` para participar", false)
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
@@ -1945,7 +1945,7 @@ private void ScheduleDailyTask()
                 .AddField("💰 Apuesta Actual", $"{challenge.BetAmount * roundMultiplier * 2:F1} créditos", true)
                 .AddField("📈 Multiplicador", $"x{1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1)):F2}", true)
                 .AddField("📝 Instrucciones", 
-                    $"Ambos jugadores deben usar 'adivino {challengeId} [respuesta]' nuevamente", false)
+                    $"Ambos jugadores deben usar `/participar [Responder al reto activo] [usuario]` nuevamente", false)
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
@@ -2054,7 +2054,7 @@ private void ScheduleDailyTask()
                 .AddField("💰 Apuesta Actual", $"{challenge.BetAmount * roundMultiplier * 2:F1} créditos", true)
                 .AddField("📈 Multiplicador", $"x{1.0m + (_retarRoundMultiplier * (challenge.CurrentRound - 1)):F2}", true)
                 .AddField("📝 Instrucciones", 
-                    $"Ambos jugadores deben usar `/adivino [usuario]` nuevamente", false)
+                    $"Ambos jugadores deben usar `/participar [Responder al reto activo] [usuario]` nuevamente", false)
                 .WithTimestamp(DateTimeOffset.Now)
                 .Build();
 
@@ -2282,7 +2282,7 @@ private void ScheduleDailyTask()
                 "• Si ambos fallan, nueva ronda con imagen nueva\n" +
                 "• La apuesta se multiplica cada ronda\n" +
                 "• El ganador se lleva todos los créditos", false)
-            .AddField("📝 Instrucciones", "Usen `/adivino @usuario` para hacer sus intentos", false)
+            .AddField("📝 Instrucciones", "Usen `/participar [Responder al reto activo] [usuario]` para hacer sus intentos", false)
             .WithTimestamp(DateTimeOffset.Now)
             .Build();
         
@@ -3558,7 +3558,7 @@ private void ScheduleDailyTask()
                                     newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                                 }
 
-                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar resolver [respuesta]` para resolverlo", false);
+                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar [Resolver el puzzle activo] [respuesta]` para resolverlo", false);
 
                                 await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                             }
