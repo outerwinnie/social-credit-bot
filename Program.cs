@@ -881,18 +881,18 @@ class Bot
         // Unified /usar command with subcommands
         var usarCommand = new SlashCommandBuilder()
             .WithName("usar")
-            .WithDescription("Usa créditos para diferentes acciones")
+            .WithDescription("Usa los créditos para realizar diferentes acciones")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("accion")
                 .WithDescription("Acción a realizar")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.String)
-                .AddChoice("Recuerdate", "recuerdate")
-                .AddChoice("Meme", "meme")
-                .AddChoice("Preguntar", "preguntar")
-                .AddChoice("Regalar", "regalar")
-                .AddChoice("Retar", "retar")
-                .AddChoice("Saldo", "saldo"))
+                .AddChoice("Canjear Recuerdate", "recuerdate")
+                .AddChoice("Canjear Meme", "meme")
+                .AddChoice("Preguntar a el espejismo de otro usuario", "preguntar")
+                .AddChoice("Regalar creditos a otro usuario", "regalar")
+                .AddChoice("Retar a otro usuario", "retar")
+                .AddChoice("Ver Saldo", "saldo"))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario objetivo (para preguntar, regalar, retar)")
@@ -946,16 +946,16 @@ class Bot
         // Merged participation command
         var participarCommand = new SlashCommandBuilder()
             .WithName("participar")
-            .WithDescription("Participa en juegos del bot")
+            .WithDescription("Participa en alguno de los juegos del bot")
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("accion")
                 .WithDescription("Tipo de participación")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.String)
-                .AddChoice("Revelar usuario de imagen diaria", "revelar")
-                .AddChoice("Adivinar en reto activo", "adivino")
-                .AddChoice("Votar por ganador del mes", "votar")
-                .AddChoice("Resolver puzzle activo", "resolver"))
+                .AddChoice("Revela a el usuario de la ultima imagen", "revelar")
+                .AddChoice("Responder al reto activo", "adivino")
+                .AddChoice("Votar por el ganador del mes", "votar")
+                .AddChoice("Resolver el puzzle activo", "resolver"))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
                 .WithDescription("Usuario a seleccionar (revelar/adivino/votar)")
@@ -999,8 +999,6 @@ class Bot
         var puzzleGuildCommand = puzzleCommand.Build();
         await _client.Rest.CreateGuildCommand(puzzleGuildCommand, _guildId);
         Console.WriteLine("Slash command 'puzzle' registered for the guild.");
-
-
 
     }
     
