@@ -882,6 +882,7 @@ class Bot
         var usarCommand = new SlashCommandBuilder()
             .WithName("usar")
             .WithDescription("Usa créditos para diferentes acciones")
+            .AddOption(new SlashCommandOptionBuilder()
                 .WithName("accion")
                 .WithDescription("Acción a realizar")
                 .WithRequired(true)
