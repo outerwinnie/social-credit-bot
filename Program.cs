@@ -399,12 +399,13 @@ class Bot
                             
                             if (_activePuzzle.CorrectSolvers.Count > 0)
                             {
-                                // At least one person solved it - show as completed
-                                embed.WithTitle("🧩 Puzzle Completado")
-                                    .WithDescription("El puzzle ha expirado después de 24 horas, pero fue resuelto correctamente!")
-                                    .WithColor(Color.Green)
+                                // At least one person solved it - show as expired with winners
+                                embed.WithTitle("⏰ Puzzle Expirado")
+                                    .WithDescription("El puzzle ha expirado después de 24 horas.")
+                                    .WithColor(Color.Orange)
                                     .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
-                                    .AddField("✅ Respuesta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false);
+                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
+                                    .AddField("💰 Recompensa", $"{_puzzleReward} créditos por ganador", false);
                             }
                             else
                             {
@@ -428,6 +429,62 @@ class Bot
                 });
 
                 _activePuzzle = null;
+                
+                // Auto-approve and activate next puzzle if available
+                if (_pendingPuzzles.Count > 0)
+                {
+                    var nextPuzzle = _pendingPuzzles.Dequeue();
+                    nextPuzzle.IsApproved = true;
+                    nextPuzzle.IsActive = true;
+                    nextPuzzle.ActivatedAt = DateTime.Now;
+                    _activePuzzle = nextPuzzle;
+                    
+                    Console.WriteLine($"[PUZZLE] Auto-approved and activated next puzzle: {nextPuzzle.PuzzleId}");
+                    
+                    // Announce new puzzle in channel
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(2000); // Small delay after expiration announcement
+                            
+                            var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                            var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                            
+                            if (targetChannel != null)
+                            {
+                                var newPuzzleEmbed = new EmbedBuilder()
+                                    .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                    .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                                    .WithColor(Color.Blue)
+                                    .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                    .AddField("👥 Límite", "3 ganadores", true)
+                                    .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
+                                    .AddField("⏱️ Duración", "24 horas", true)
+                                    .WithTimestamp(DateTimeOffset.Now);
+
+                                if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                                {
+                                    newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                                }
+
+                                if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                                {
+                                    newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                                }
+
+                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver [respuesta]` para resolverlo", false);
+
+                                await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error announcing new auto-approved puzzle: {ex.Message}");
+                        }
+                    });
+                }
+                
                 SavePuzzles();
             }
         }
@@ -1120,6 +1177,57 @@ private void ScheduleDailyTask()
                 else
                 {
                     Console.WriteLine("Quiz image posting is frozen until the first of the month.");
+                }
+                
+                // Check if we need to activate a puzzle (if no active puzzle and puzzles in queue)
+                if (_activePuzzle == null && _pendingPuzzles.Count > 0)
+                {
+                    var nextPuzzle = _pendingPuzzles.Dequeue();
+                    nextPuzzle.IsApproved = true;
+                    nextPuzzle.IsActive = true;
+                    nextPuzzle.ActivatedAt = DateTime.Now;
+                    _activePuzzle = nextPuzzle;
+                    
+                    Console.WriteLine($"[PUZZLE] Daily auto-activated puzzle: {nextPuzzle.PuzzleId}");
+                    SavePuzzles();
+                    
+                    // Announce new puzzle
+                    try
+                    {
+                        var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                        var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                        
+                        if (targetChannel != null)
+                        {
+                            var newPuzzleEmbed = new EmbedBuilder()
+                                .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                                .WithColor(Color.Blue)
+                                .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                .AddField("👥 Límite", "3 ganadores", true)
+                                .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
+                                .AddField("⏱️ Duración", "24 horas", true)
+                                .WithTimestamp(DateTimeOffset.Now);
+
+                            if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                            {
+                                newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                            }
+
+                            if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                            {
+                                newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                            }
+
+                            newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver respuesta:tu_respuesta` para resolverlo", false);
+
+                            await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error announcing daily auto-activated puzzle: {ex.Message}");
+                    }
                 }
             }   
         });
@@ -1945,7 +2053,7 @@ else if (command.Data.Name == "meme")
                 _activePuzzle.AttemptedUsers.Add(userId);
                 var userAnswer = respuestaOption.Value.ToString()!.Trim();
                 var isCorrect = _activePuzzle.CorrectAnswers.Any(answer => 
-                    string.Equals(userAnswer, answer, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(NormalizeText(userAnswer), NormalizeText(answer), StringComparison.OrdinalIgnoreCase));
 
                 if (isCorrect)
                 {
@@ -1988,6 +2096,61 @@ else if (command.Data.Name == "meme")
 
                         _activePuzzle = null;
                         Console.WriteLine("[PUZZLE] Puzzle completed by 3 solvers");
+                        
+                        // Auto-approve and activate next puzzle if available
+                        if (_pendingPuzzles.Count > 0)
+                        {
+                            var nextPuzzle = _pendingPuzzles.Dequeue();
+                            nextPuzzle.IsApproved = true;
+                            nextPuzzle.IsActive = true;
+                            nextPuzzle.ActivatedAt = DateTime.Now;
+                            _activePuzzle = nextPuzzle;
+                            
+                            Console.WriteLine($"[PUZZLE] Auto-approved and activated next puzzle after completion: {nextPuzzle.PuzzleId}");
+                            
+                            // Announce new puzzle in channel after a delay
+                            Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await Task.Delay(3000); // Delay after completion announcement
+                                    
+                                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                                    
+                                    if (targetChannel != null)
+                                    {
+                                        var newPuzzleEmbed = new EmbedBuilder()
+                                            .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                            .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                                            .WithColor(Color.Blue)
+                                            .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                            .AddField("👥 Límite", "3 ganadores", true)
+                                            .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
+                                            .AddField("⏱️ Duración", "24 horas", true)
+                                            .WithTimestamp(DateTimeOffset.Now);
+
+                                        if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                                        {
+                                            newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                                        }
+
+                                        if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                                        {
+                                            newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                                        }
+
+                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver [respuesta]` para resolverlo", false);
+
+                                        await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error announcing new auto-approved puzzle after completion: {ex.Message}");
+                                }
+                            });
+                        }
                     }
                 }
                 else
@@ -3239,6 +3402,27 @@ else if (command.Data.Name == "meme")
         SavePuzzles();
 
         await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
+    }
+
+    // Helper method to normalize text by removing accents
+    private static string NormalizeText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        var normalizedString = text.Normalize(NormalizationForm.FormD);
+        var stringBuilder = new StringBuilder();
+
+        foreach (var c in normalizedString)
+        {
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                stringBuilder.Append(c);
+            }
+        }
+
+        return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
     }
 }
 
