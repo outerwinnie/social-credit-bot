@@ -953,34 +953,28 @@ class Bot
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.String)
                 .AddChoice("Revelar usuario de imagen diaria", "revelar")
-                .AddChoice("Adivinar en reto activo", "adivino"))
+                .AddChoice("Adivinar en reto activo", "adivino")
+                .AddChoice("Votar por ganador del mes", "votar")
+                .AddChoice("Resolver puzzle activo", "resolver"))
             .AddOption(new SlashCommandOptionBuilder()
                 .WithName("usuario")
-                .WithDescription("Usuario a seleccionar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User));
+                .WithDescription("Usuario a seleccionar (revelar/adivino/votar)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.User))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("cantidad")
+                .WithDescription("Cantidad de créditos a apostar (solo para votar)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.Integer))
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("respuesta")
+                .WithDescription("Tu respuesta al puzzle (solo para resolver)")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.String));
         
         var participarGuildCommand = participarCommand.Build();
         await _client.Rest.CreateGuildCommand(participarGuildCommand, _guildId);
         Console.WriteLine("Slash command 'participar' registered for the guild.");
-
-        var voteCommand = new SlashCommandBuilder()
-            .WithName("votar")
-            .WithDescription("Vota por el usuario que crees que quedara primero en la clasificacion y apuesta créditos")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("usuario")
-                .WithDescription("Usuario a votar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.User))
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("cantidad")
-                .WithDescription("Cantidad de créditos a apostar")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.Integer));
-        
-        var voteGuildCommand = voteCommand.Build();
-        await _client.Rest.CreateGuildCommand(voteGuildCommand, _guildId);
-        Console.WriteLine($"Slash command 'votar' registered for the guild.");
 
         // Puzzle creation command
         var puzzleCommand = new SlashCommandBuilder()
@@ -1007,19 +1001,6 @@ class Bot
         Console.WriteLine("Slash command 'puzzle' registered for the guild.");
 
 
-        // Puzzle solving command
-        var resolverCommand = new SlashCommandBuilder()
-            .WithName("resolver")
-            .WithDescription($"Resuelve el puzzle activo (recompensa: {_puzzleReward} créditos)")
-            .AddOption(new SlashCommandOptionBuilder()
-                .WithName("respuesta")
-                .WithDescription("Tu respuesta al puzzle")
-                .WithRequired(true)
-                .WithType(ApplicationCommandOptionType.String));
-        
-        var resolverGuildCommand = resolverCommand.Build();
-        await _client.Rest.CreateGuildCommand(resolverGuildCommand, _guildId);
-        Console.WriteLine("Slash command 'resolver' registered for the guild.");
 
     }
     
@@ -1363,8 +1344,7 @@ private void ScheduleDailyTask()
                         break;
                 }
             }
-
-
+            
             else if (command.Data.Name == "participar")
             {
                 var accionOption = command.Data.Options.FirstOrDefault(o => o.Name == "accion");
@@ -1384,72 +1364,16 @@ private void ScheduleDailyTask()
                     case "adivino":
                         await HandleAdivinoParticipation(command);
                         break;
+                    case "votar":
+                        await HandleVotarParticipation(command);
+                        break;
+                    case "resolver":
+                        await HandleResolverParticipation(command);
+                        break;
                     default:
                         await command.RespondAsync("Acción no válida.", ephemeral: true);
                         break;
                 }
-            }
-            
-            
-            else if (command.Data.Name == "votar")
-            {
-                var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
-                var betOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad" || o.Name == "bet" || o.Name == "apuesta");
-
-                if (userOption == null)
-                {
-                    await command.RespondAsync("Debes especificar el usuario a votar.", ephemeral: true);
-                    return;
-                }
-
-                var votedForUser = userOption.Value as SocketUser;
-                if (votedForUser == null)
-                {
-                    await command.RespondAsync("Usuario inválido para votar.", ephemeral: true);
-                    return;
-                }
-
-                ulong voterId = command.User.Id;
-                ulong votedForId = votedForUser.Id;
-
-                if (voterId == votedForId)
-                {
-                    await command.RespondAsync("No puedes votar por ti mismo.", ephemeral: true);
-                    return;
-                }
-
-                int betAmount = 1; // Default bet if not present
-                if (betOption != null && int.TryParse(betOption.Value?.ToString(), out int parsedBet))
-                {
-                    betAmount = parsedBet;
-                }
-                if (betAmount <= 0)
-                {
-                    await command.RespondAsync("La cantidad apostada debe ser un número positivo.", ephemeral: true);
-                    return;
-                }
-
-                // Load votes from CSV to ensure up-to-date
-                LoadVotes();
-                var existingVote = _votes.FirstOrDefault(v => v.VoterId == voterId && v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year);
-                if (existingVote != null)
-                {
-                    existingVote.VotedForId = votedForId;
-                    existingVote.BetAmount = betAmount;
-                    existingVote.Timestamp = DateTime.Now;
-                }
-                else
-                {
-                    _votes.Add(new VoteRecord
-                    {
-                        VoterId = voterId,
-                        VotedForId = votedForId,
-                        BetAmount = betAmount,
-                        Timestamp = DateTime.Now
-                    });
-                }
-                SaveVotes();
-                await command.RespondAsync($"<@{voterId}> ha votado por <@{votedForId}> con una apuesta de {betAmount}.");
             }
             else if (command.Data.Name == "puzzle")
             {
@@ -1623,7 +1547,7 @@ private void ScheduleDailyTask()
                                             newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
                                         }
 
-                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/resolver [respuesta]` para resolverlo", false);
+                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar resolver [respuesta]` para resolverlo", false);
 
                                         await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
                                     }
@@ -3440,6 +3364,221 @@ private void ScheduleDailyTask()
         {
             await EvaluateRoundFromSlashCommand(targetChannel, challenge, challenge.ChallengeId);
         }
+    }
+
+    private async Task HandleVotarParticipation(SocketSlashCommand command)
+    {
+        var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
+        var cantidadOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
+
+        if (userOption == null)
+        {
+            await command.RespondAsync("Debes especificar el usuario a votar.", ephemeral: true);
+            return;
+        }
+
+        if (cantidadOption == null)
+        {
+            await command.RespondAsync("Debes especificar la cantidad de créditos a apostar.", ephemeral: true);
+            return;
+        }
+
+        var votedForUser = userOption.Value as SocketUser;
+        if (votedForUser == null)
+        {
+            await command.RespondAsync("Usuario inválido para votar.", ephemeral: true);
+            return;
+        }
+
+        ulong voterId = command.User.Id;
+        ulong votedForId = votedForUser.Id;
+
+        if (voterId == votedForId)
+        {
+            await command.RespondAsync("No puedes votar por ti mismo.", ephemeral: true);
+            return;
+        }
+
+        if (!int.TryParse(cantidadOption.Value?.ToString(), out int betAmount) || betAmount <= 0)
+        {
+            await command.RespondAsync("La cantidad apostada debe ser un número positivo.", ephemeral: true);
+            return;
+        }
+
+        // Load votes from CSV to ensure up-to-date
+        LoadVotes();
+        var existingVote = _votes.FirstOrDefault(v => v.VoterId == voterId && v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year);
+        if (existingVote != null)
+        {
+            existingVote.VotedForId = votedForId;
+            existingVote.BetAmount = betAmount;
+            existingVote.Timestamp = DateTime.Now;
+        }
+        else
+        {
+            _votes.Add(new VoteRecord
+            {
+                VoterId = voterId,
+                VotedForId = votedForId,
+                BetAmount = betAmount,
+                Timestamp = DateTime.Now
+            });
+        }
+        SaveVotes();
+        await command.RespondAsync($"<@{voterId}> ha votado por <@{votedForId}> con una apuesta de {betAmount}.");
+    }
+
+    private async Task HandleResolverParticipation(SocketSlashCommand command)
+    {
+        var respuestaOption = command.Data.Options.FirstOrDefault(o => o.Name == "respuesta");
+
+        if (respuestaOption == null)
+        {
+            await command.RespondAsync("Debes proporcionar una respuesta.", ephemeral: true);
+            return;
+        }
+
+        // Check for puzzle expiration before allowing solving
+        CheckPuzzleExpiration();
+
+        if (_activePuzzle == null)
+        {
+            await command.RespondAsync("No hay ningún puzzle activo en este momento.", ephemeral: true);
+            return;
+        }
+
+        var userId = command.User.Id;
+
+        // Check if user is the creator
+        if (userId == _activePuzzle.CreatorId)
+        {
+            await command.RespondAsync("No puedes resolver tu propio puzzle.", ephemeral: true);
+            return;
+        }
+
+        // Check if user already attempted
+        if (_activePuzzle.AttemptedUsers.Contains(userId))
+        {
+            await command.RespondAsync("Ya has intentado resolver este puzzle.", ephemeral: true);
+            return;
+        }
+
+        // Check if puzzle is already solved by 3 people
+        if (_activePuzzle.CorrectSolvers.Count >= 3)
+        {
+            await command.RespondAsync("Este puzzle ya ha sido resuelto por 3 personas.", ephemeral: true);
+            return;
+        }
+
+        _activePuzzle.AttemptedUsers.Add(userId);
+        var userAnswer = respuestaOption.Value.ToString()!.Trim();
+        var isCorrect = _activePuzzle.CorrectAnswers.Any(answer => 
+            string.Equals(NormalizeText(userAnswer), NormalizeText(answer), StringComparison.OrdinalIgnoreCase));
+
+        if (isCorrect)
+        {
+            _activePuzzle.CorrectSolvers.Add(userId);
+            
+            // Give reward
+            LoadData();
+            if (!_userReactionCounts.ContainsKey(userId))
+                _userReactionCounts[userId] = 0;
+            
+            _userReactionCounts[userId] += _puzzleReward;
+            SaveData();
+
+            var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+            var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+
+            if (targetChannel != null)
+            {
+                await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
+            }
+
+            await command.RespondAsync($"🎉 ¡Correcto! Has ganado {_puzzleReward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)", ephemeral: true);
+
+            // Check if puzzle is complete (3 solvers)
+            if (_activePuzzle.CorrectSolvers.Count >= 3)
+            {
+                if (targetChannel != null)
+                {
+                    var embed = new EmbedBuilder()
+                        .WithTitle("🧩 Puzzle Completado")
+                        .WithDescription("El puzzle ha sido resuelto por 3 personas!")
+                        .WithColor(Color.Green)
+                        .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
+                        .AddField("✅ Respuesta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
+                        .WithTimestamp(DateTimeOffset.Now)
+                        .Build();
+
+                    await targetChannel.SendMessageAsync(embed: embed);
+                }
+
+                _activePuzzle = null;
+                Console.WriteLine("[PUZZLE] Puzzle completed by 3 solvers");
+                
+                // Auto-approve and activate next puzzle if available
+                if (_pendingPuzzles.Count > 0)
+                {
+                    var nextPuzzle = _pendingPuzzles.Dequeue();
+                    nextPuzzle.IsApproved = true;
+                    nextPuzzle.IsActive = true;
+                    nextPuzzle.ActivatedAt = DateTime.Now;
+                    _activePuzzle = nextPuzzle;
+                    
+                    Console.WriteLine($"[PUZZLE] Auto-approved and activated next puzzle after completion: {nextPuzzle.PuzzleId}");
+                    
+                    // Announce new puzzle in channel after a delay
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(3000); // Delay after completion announcement
+                            
+                            var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
+                            var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
+                            
+                            if (targetChannel != null)
+                            {
+                                var newPuzzleEmbed = new EmbedBuilder()
+                                    .WithTitle("🧩 ¡Nuevo Puzzle!")
+                                    .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
+                                    .WithColor(Color.Blue)
+                                    .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
+                                    .AddField("👥 Límite", "3 ganadores", true)
+                                    .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
+                                    .AddField("⏱️ Duración", "24 horas", true)
+                                    .WithTimestamp(DateTimeOffset.Now);
+
+                                if (!string.IsNullOrEmpty(nextPuzzle.Text))
+                                {
+                                    newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
+                                }
+
+                                if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
+                                {
+                                    newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
+                                }
+
+                                newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar resolver [respuesta]` para resolverlo", false);
+
+                                await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error announcing new auto-approved puzzle after completion: {ex.Message}");
+                        }
+                    });
+                }
+            }
+        }
+        else
+        {
+            await command.RespondAsync($"❌ <@{userId}> Respuesta incorrecta.", ephemeral: false);
+        }
+
+        SavePuzzles();
     }
 }
 
