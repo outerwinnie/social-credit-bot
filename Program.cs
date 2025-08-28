@@ -952,7 +952,7 @@ class Bot
                 .WithDescription("Tipo de participación")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.String)
-                .AddChoice("Revela a el usuario de la ultima imagen", "revelar")
+                .AddChoice("Revela al usuario de la ultima imagen", "revelar")
                 .AddChoice("Responder al reto activo", "adivino")
                 .AddChoice("Votar por el ganador del mes", "votar")
                 .AddChoice("Resolver el puzzle activo", "resolver"))
