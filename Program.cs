@@ -385,6 +385,9 @@ class Bot
             {
                 Console.WriteLine($"[PUZZLE] Puzzle expired after 24 hours: {_activePuzzle.PuzzleId}");
                 
+                // Store expired puzzle data before nullifying
+                var expiredPuzzle = _activePuzzle;
+                
                 // Announce expiration in channel
                 Task.Run(async () =>
                 {
@@ -397,14 +400,14 @@ class Bot
                         {
                             var embed = new EmbedBuilder();
                             
-                            if (_activePuzzle.CorrectSolvers.Count > 0)
+                            if (expiredPuzzle.CorrectSolvers.Count > 0)
                             {
                                 // At least one person solved it - show as expired with winners
                                 embed.WithTitle("⏰ Puzzle Expirado")
                                     .WithDescription("El puzzle ha expirado después de 24 horas.")
                                     .WithColor(Color.Orange)
-                                    .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
-                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
+                                    .AddField("🏆 Ganadores", string.Join(", ", expiredPuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
+                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", expiredPuzzle.CorrectAnswers), false)
                                     .AddField("💰 Recompensa", $"{_puzzleReward} créditos por ganador", false);
                             }
                             else
@@ -413,7 +416,7 @@ class Bot
                                 embed.WithTitle("⏰ Puzzle Expirado")
                                     .WithDescription("El puzzle activo ha expirado después de 24 horas.")
                                     .WithColor(Color.Orange)
-                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
+                                    .AddField("✅ Respuesta(s) Correcta(s)", string.Join(", ", expiredPuzzle.CorrectAnswers), false)
                                     .AddField("🏆 Ganadores", "Ninguno", false);
                             }
                             
@@ -1412,158 +1415,6 @@ private void ScheduleDailyTask()
 
                 await command.RespondAsync($"✅ Tu puzzle ha sido enviado para aprobación. ID: `{puzzle.PuzzleId}`", ephemeral: true);
                 Console.WriteLine($"[PUZZLE] New puzzle created by {command.User.Username}: {puzzle.PuzzleId}");
-            }
-            else if (command.Data.Name == "resolver")
-            {
-                var respuestaOption = command.Data.Options.FirstOrDefault(o => o.Name == "respuesta");
-
-                if (respuestaOption == null)
-                {
-                    await command.RespondAsync("Debes proporcionar una respuesta.", ephemeral: true);
-                    return;
-                }
-
-                // Check for puzzle expiration before allowing solving
-                CheckPuzzleExpiration();
-
-                if (_activePuzzle == null)
-                {
-                    await command.RespondAsync("No hay ningún puzzle activo en este momento.", ephemeral: true);
-                    return;
-                }
-
-                var userId = command.User.Id;
-
-                // Check if user is the creator
-                if (userId == _activePuzzle.CreatorId)
-                {
-                    await command.RespondAsync("No puedes resolver tu propio puzzle.", ephemeral: true);
-                    return;
-                }
-
-                // Check if user already attempted
-                if (_activePuzzle.AttemptedUsers.Contains(userId))
-                {
-                    await command.RespondAsync("Ya has intentado resolver este puzzle.", ephemeral: true);
-                    return;
-                }
-
-                // Check if puzzle is already solved by 3 people
-                if (_activePuzzle.CorrectSolvers.Count >= 3)
-                {
-                    await command.RespondAsync("Este puzzle ya ha sido resuelto por 3 personas.", ephemeral: true);
-                    return;
-                }
-
-                _activePuzzle.AttemptedUsers.Add(userId);
-                var userAnswer = respuestaOption.Value.ToString()!.Trim();
-                var isCorrect = _activePuzzle.CorrectAnswers.Any(answer => 
-                    string.Equals(NormalizeText(userAnswer), NormalizeText(answer), StringComparison.OrdinalIgnoreCase));
-
-                if (isCorrect)
-                {
-                    _activePuzzle.CorrectSolvers.Add(userId);
-                    
-                    // Give reward
-                    LoadData();
-                    if (!_userReactionCounts.ContainsKey(userId))
-                        _userReactionCounts[userId] = 0;
-                    
-                    _userReactionCounts[userId] += _puzzleReward;
-                    SaveData();
-
-                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-
-                    if (targetChannel != null)
-                    {
-                        await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
-                    }
-
-                    await command.RespondAsync($"🎉 ¡Correcto! Has ganado {_puzzleReward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)", ephemeral: true);
-
-                    // Check if puzzle is complete (3 solvers)
-                    if (_activePuzzle.CorrectSolvers.Count >= 3)
-                    {
-                        if (targetChannel != null)
-                        {
-                            var embed = new EmbedBuilder()
-                                .WithTitle("🧩 Puzzle Completado")
-                                .WithDescription("El puzzle ha sido resuelto por 3 personas!")
-                                .WithColor(Color.Green)
-                                .AddField("🏆 Ganadores", string.Join(", ", _activePuzzle.CorrectSolvers.Select(id => $"<@{id}>")), false)
-                                .AddField("✅ Respuesta(s)", string.Join(", ", _activePuzzle.CorrectAnswers), false)
-                                .WithTimestamp(DateTimeOffset.Now)
-                                .Build();
-
-                            await targetChannel.SendMessageAsync(embed: embed);
-                        }
-
-                        _activePuzzle = null;
-                        Console.WriteLine("[PUZZLE] Puzzle completed by 3 solvers");
-                        
-                        // Auto-approve and activate next puzzle if available
-                        if (_pendingPuzzles.Count > 0)
-                        {
-                            var nextPuzzle = _pendingPuzzles.Dequeue();
-                            nextPuzzle.IsApproved = true;
-                            nextPuzzle.IsActive = true;
-                            nextPuzzle.ActivatedAt = DateTime.Now;
-                            _activePuzzle = nextPuzzle;
-                            
-                            Console.WriteLine($"[PUZZLE] Auto-approved and activated next puzzle after completion: {nextPuzzle.PuzzleId}");
-                            
-                            // Announce new puzzle in channel after a delay
-                            Task.Run(async () =>
-                            {
-                                try
-                                {
-                                    await Task.Delay(3000); // Delay after completion announcement
-                                    
-                                    var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
-                                    var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
-                                    
-                                    if (targetChannel != null)
-                                    {
-                                        var newPuzzleEmbed = new EmbedBuilder()
-                                            .WithTitle("🧩 ¡Nuevo Puzzle!")
-                                            .WithDescription("¡Un nuevo puzzle ha sido aprobado!")
-                                            .WithColor(Color.Blue)
-                                            .AddField("💰 Recompensa", $"{_puzzleReward} créditos", true)
-                                            .AddField("👥 Límite", "3 ganadores", true)
-                                            .AddField("🎯 Una oportunidad", "Solo lo puedes intentar una vez", true)
-                                            .AddField("⏱️ Duración", "24 horas", true)
-                                            .WithTimestamp(DateTimeOffset.Now);
-
-                                        if (!string.IsNullOrEmpty(nextPuzzle.Text))
-                                        {
-                                            newPuzzleEmbed.AddField("📝 Puzzle", nextPuzzle.Text, false);
-                                        }
-
-                                        if (!string.IsNullOrEmpty(nextPuzzle.ImageUrl))
-                                        {
-                                            newPuzzleEmbed.WithImageUrl(nextPuzzle.ImageUrl);
-                                        }
-
-                                        newPuzzleEmbed.AddField("💡 Instrucciones", "Usa `/participar [Resolver el puzzle activo] [respuesta]` para resolverlo", false);
-
-                                        await targetChannel.SendMessageAsync(embed: newPuzzleEmbed.Build());
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"Error announcing new auto-approved puzzle after completion: {ex.Message}");
-                                }
-                            });
-                        }
-                    }
-                }
-                else
-                {
-                    await command.RespondAsync($"❌ <@{userId}> Respuesta incorrecta.", ephemeral: false);
-                }
-
-                SavePuzzles();
             }
         }
         
