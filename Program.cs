@@ -777,17 +777,26 @@ class Bot
                 SaveData();
             }
             // --- VOTING PAYOUT LOGIC ---
-            decimal voteMultiplier = 1;
+            decimal voteMultiplier = 1.25m; // Default to 1.25x if not set
             decimal.TryParse(Environment.GetEnvironmentVariable("VOTE_MULTIPLIER"), out voteMultiplier);
-            decimal majorityVoteMultiplier = voteMultiplier;
+            decimal majorityVoteMultiplier = 1.50m; // Default to 1.50x if not set
             decimal.TryParse(Environment.GetEnvironmentVariable("MAJORITY_VOTE_MULTIPLIER"), out majorityVoteMultiplier);
+            
             LoadVotes();
             var thisMonthVotes = _votes.Where(v => v.Timestamp.Month == DateTime.Now.Month && v.Timestamp.Year == DateTime.Now.Year).ToList();
             var correctVotes = thisMonthVotes.Where(v => v.VotedForId == firstPlaceUserId).ToList();
+            
+            Console.WriteLine($"[VOTING] Total votes this month: {thisMonthVotes.Count}");
+            Console.WriteLine($"[VOTING] Correct votes for winner {firstPlaceUserId}: {correctVotes.Count}");
+            Console.WriteLine($"[VOTING] Vote multiplier: {voteMultiplier}, Majority multiplier: {majorityVoteMultiplier}");
+            
             decimal usedMultiplier = voteMultiplier;
             bool isMajority = (thisMonthVotes.Count > 0 && correctVotes.Count > thisMonthVotes.Count / 2);
             if (isMajority)
                 usedMultiplier = majorityVoteMultiplier;
+                
+            Console.WriteLine($"[VOTING] Using multiplier: {usedMultiplier} (majority: {isMajority})");
+            
             if (correctVotes.Count > 0)
             {
                 foreach (var vote in correctVotes)
