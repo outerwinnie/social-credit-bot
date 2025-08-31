@@ -3242,12 +3242,6 @@ private void ScheduleDailyTask()
         ulong voterId = command.User.Id;
         ulong votedForId = votedForUser.Id;
 
-        if (voterId == votedForId)
-        {
-            await command.RespondAsync("No puedes votar por ti mismo.", ephemeral: true);
-            return;
-        }
-
         if (!int.TryParse(cantidadOption.Value?.ToString(), out int betAmount) || betAmount <= 0)
         {
             await command.RespondAsync("La cantidad apostada debe ser un número positivo.", ephemeral: true);
