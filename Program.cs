@@ -799,6 +799,7 @@ class Bot
             
             if (correctVotes.Count > 0)
             {
+                Console.WriteLine($"[VOTING] Processing {correctVotes.Count} correct votes for rewards...");
                 foreach (var vote in correctVotes)
                 {
                     int extra = (int)Math.Round(vote.BetAmount * (usedMultiplier - 1), 0, MidpointRounding.AwayFromZero);
@@ -814,6 +815,18 @@ class Bot
                 await targetChannel.SendMessageAsync($":moneybag: ¡Las apuestas correctas han sido multiplicadas por {usedMultiplier:0.##} ({multiplierType})! Ganadores: {winnerMentions}");
                 _votes.Clear();
                 SaveVotes();
+            }
+            else
+            {
+                Console.WriteLine($"[VOTING] No correct votes found. Total votes: {thisMonthVotes.Count}, Winner: {firstPlaceUserId}");
+                if (thisMonthVotes.Count > 0)
+                {
+                    Console.WriteLine($"[VOTING] Vote details:");
+                    foreach (var vote in thisMonthVotes)
+                    {
+                        Console.WriteLine($"[VOTING] - Voter {vote.VoterId} voted for {vote.VotedForId} with {vote.BetAmount} credits");
+                    }
+                }
             }
             string firstPlaceUsername = await GetUsernameOrMention(firstPlaceUserId);
             await targetChannel.SendMessageAsync($":gift: ¡{firstPlaceUsername} ha ganado el premio por terminar en el primer puesto de la clasificacion! (+{rewardCredits} créditos)");
