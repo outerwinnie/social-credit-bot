@@ -1001,6 +1001,20 @@ class Bot
         await _client.Rest.CreateGuildCommand(participarGuildCommand, _guildId);
         Console.WriteLine("Slash command 'participar' registered for the guild.");
 
+        // Standalone revelar command
+        var revelarCommand = new SlashCommandBuilder()
+            .WithName("revelar")
+            .WithDescription("Revela al usuario de la ultima imagen")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("usuario")
+                .WithDescription("Usuario que crees que subió la imagen")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.User));
+        
+        var revelarGuildCommand = revelarCommand.Build();
+        await _client.Rest.CreateGuildCommand(revelarGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'revelar' registered for the guild.");
+
         // Puzzle creation command
         var puzzleCommand = new SlashCommandBuilder()
             .WithName("puzzle")
@@ -1397,6 +1411,10 @@ private void ScheduleDailyTask()
                         await command.RespondAsync("Acción no válida.", ephemeral: true);
                         break;
                 }
+            }
+            else if (command.Data.Name == "revelar")
+            {
+                await HandleRevelarParticipation(command);
             }
             else if (command.Data.Name == "puzzle")
             {
