@@ -24,7 +24,6 @@ class Bot
     private readonly DiscordSocketClient _client;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
-    private readonly string _rewardsFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
@@ -212,7 +211,6 @@ class Bot
         _puzzlesPath = Path.Combine(dataDirectory, "puzzles.json");
         _csvFilePath = Path.Combine(dataDirectory, "user_reactions.csv");
         _ignoredUsersFilePath = Path.Combine(dataDirectory, "ignored_users.csv");
-        _rewardsFilePath = Path.Combine(dataDirectory, "rewards.csv");
         _votesFilePath = Path.Combine(dataDirectory, "votes.csv");
         _revelarLeaderboardPath = Path.Combine(dataDirectory, "revelar_leaderboard.json");
         _weekendMultiplierPath = Path.Combine(dataDirectory, "weekend_multiplier.json");
@@ -904,7 +902,6 @@ class Bot
         // Load existing data and ignored users from CSV files
         LoadData();
         LoadIgnoredUsers();
-        CreateRewardsFileIfNotExists();
 
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
@@ -2796,56 +2793,6 @@ private void ScheduleDailyTask()
         }
     }
 
-    private void CreateRewardsFileIfNotExists()
-    {
-        if (!File.Exists(_rewardsFilePath))
-        {
-            using var writer = new StreamWriter(_rewardsFilePath);
-            writer.WriteLine("RewardName,Quantity");
-            Console.WriteLine("Rewards CSV file created.");
-        }
-    }
-
-    private void WriteRewardToCsv(string rewardName, int quantity)
-    {
-        try
-        {
-            var rewards = new List<Reward>();
-            if (File.Exists(_rewardsFilePath))
-            {
-                using var reader = new StreamReader(_rewardsFilePath);
-                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-                csvReader.Context.RegisterClassMap<RewardMap>();
-                rewards = csvReader.GetRecords<Reward>().ToList();
-            }
-
-            var existingReward = rewards.FirstOrDefault(r => r.RewardName == rewardName);
-            if (existingReward != null)
-            {
-                existingReward.Quantity += quantity;
-            }
-            else
-            {
-                rewards.Add(new Reward
-                {
-                    RewardName = rewardName,
-                    Quantity = quantity
-                });
-            }
-
-            using var writer = new StreamWriter(_rewardsFilePath);
-            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
-            csvWriter.Context.RegisterClassMap<RewardMap>();
-            csvWriter.WriteRecords(rewards);
-
-            Console.WriteLine($"Reward '{rewardName}' updated in CSV. New quantity: {existingReward?.Quantity ?? quantity}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error writing reward to CSV: {ex.Message}");
-        }
-    }
-
     // Admin command handlers
     private async Task HandleAddCreditsAdmin(SocketSlashCommand command)
     {
@@ -3004,7 +2951,7 @@ private void ScheduleDailyTask()
         _activePuzzle = null;
         SavePuzzles();
 
-        await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
+        await command.RespondAsync("Puzzle finalizado exitosamente.", ephemeral: true);
     }
 
     // Helper methods for /usar subcommands
@@ -3012,7 +2959,7 @@ private void ScheduleDailyTask()
     {
         if (IsQuizFreezePeriod())
         {
-            await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+            await command.RespondAsync("El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
             return;
         }
 
@@ -3249,7 +3196,7 @@ private void ScheduleDailyTask()
         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
         if (targetChannel != null)
         {
-            await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
+            await targetChannel.SendMessageAsync($"<@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
         }
 
         Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} créditos");
@@ -3405,7 +3352,7 @@ private void ScheduleDailyTask()
         _userCities[userId] = cityName;
         SaveUserCities();
 
-        await command.RespondAsync($"✅ Tu ciudad ha sido establecida como: **{cityName}**. El multiplicador de lluvia se aplicará automáticamente cuando esté lloviendo en tu ciudad (una vez al día).", ephemeral: true);
+        await command.RespondAsync($"Tu ciudad ha sido establecida como: **{cityName}**. El multiplicador de lluvia se aplicará automáticamente cuando esté lloviendo en tu ciudad (una vez al día).", ephemeral: true);
     }
 
     // Helper method to normalize text by removing accents
@@ -3438,7 +3385,7 @@ private void ScheduleDailyTask()
         
         if (IsQuizFreezePeriod())
         {
-            await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+            await command.RespondAsync("El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
             return;
         }
 
@@ -3561,7 +3508,7 @@ private void ScheduleDailyTask()
                 var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
                 if (targetChannel != null)
                 {
-                    await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
+                    await targetChannel.SendMessageAsync($"¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
                 }
                 if (!IsQuizFreezePeriod())
                 {
@@ -3571,7 +3518,7 @@ private void ScheduleDailyTask()
                 {
                     if (targetChannel != null)
                     {
-                        await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
+                        await targetChannel.SendMessageAsync("El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
                     }
                 }
                 SaveQuizState(); // Save after new round/image
@@ -3619,7 +3566,7 @@ private void ScheduleDailyTask()
         challenge.RoundGuesses[challenge.CurrentRound][userId] = guessedUsername;
         SaveRetarChallenges();
 
-        await command.RespondAsync($"📝 Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
+        await command.RespondAsync($"Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
 
         // Send notification to channel
         var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
@@ -3790,7 +3737,7 @@ private void ScheduleDailyTask()
             var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
             var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
 
-            string rewardMessage = $"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {reward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)";
+            string rewardMessage = $"<@{userId}> ha resuelto el puzzle correctamente y ganado {reward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)";
             if (appliedWeekendMultiplier)
             {
                 rewardMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
@@ -3805,7 +3752,7 @@ private void ScheduleDailyTask()
                 await targetChannel.SendMessageAsync(rewardMessage);
             }
 
-            string userMessage = $"🎉 ¡Correcto! Has ganado {reward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)";
+            string userMessage = $"¡Correcto! Has ganado {reward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)";
             if (appliedWeekendMultiplier)
             {
                 userMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
@@ -3894,7 +3841,7 @@ private void ScheduleDailyTask()
         }
         else
         {
-            await command.RespondAsync($"❌ <@{userId}> Respuesta incorrecta.", ephemeral: false);
+            await command.RespondAsync($"<@{userId}> Respuesta incorrecta.", ephemeral: false);
         }
 
         SavePuzzles();
@@ -3902,21 +3849,6 @@ private void ScheduleDailyTask()
 }
 
 // Helper classes and mappings
-class Reward
-{
-    public string RewardName { get; set; }
-    public int Quantity { get; set; }
-}
-
-class RewardMap : ClassMap<Reward>
-{
-    public RewardMap()
-    {
-        Map(m => m.RewardName).Name("RewardName");
-        Map(m => m.Quantity).Name("Quantity");
-    }
-}
-
 // Define a class to represent the CSV record for reactions
 public class ReactionLog
 {
