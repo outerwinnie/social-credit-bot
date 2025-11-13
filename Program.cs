@@ -3281,7 +3281,7 @@ private void ScheduleDailyTask()
             string responseMessage = $"<@{userId}> ¡Correcto! Has ganado {reward} créditos.";
             if (appliedWeekendMultiplier)
             {
-                responseMessage += $" 🎉 ¡Multiplicador de fin de semana x{_weekendMultiplier:0.##} aplicado!";
+                responseMessage += $"¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
             }
             await command.RespondAsync(responseMessage);
 
