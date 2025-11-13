@@ -4,3 +4,7 @@ social-credit-bot.generated.sln
 social-credit-bot.sln
 quiz_state.json
 votes.csv
+obj
+obj/Social-Credit-Bot.csproj.nuget.dgspec.json
+obj/project.nuget.cache
+obj/project.assets.json

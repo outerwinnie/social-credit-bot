@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "65F5suoPGVA=",
+  "dgSpecHash": "/u05JS1Vu2I=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Winnie\\RiderProjects\\social-credit-bot\\Social-Credit-Bot.csproj",
+  "projectFilePath": "C:\\Users\\Winnie\\Desktop\\Nueva carpeta\\social-credit-bot\\Social-Credit-Bot.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Winnie\\.nuget\\packages\\csvhelper\\33.0.1\\csvhelper.33.0.1.nupkg.sha512",
     "C:\\Users\\Winnie\\.nuget\\packages\\discord.net\\3.16.0\\discord.net.3.16.0.nupkg.sha512",

@@ -757,13 +757,12 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Winnie\\RiderProjects\\social-credit-bot\\Social-Credit-Bot.csproj",
+      "projectUniqueName": "C:\\Users\\Winnie\\Desktop\\Nueva carpeta\\social-credit-bot\\Social-Credit-Bot.csproj",
       "projectName": "Social-Credit-Bot",
-      "projectPath": "C:\\Users\\Winnie\\RiderProjects\\social-credit-bot\\Social-Credit-Bot.csproj",
+      "projectPath": "C:\\Users\\Winnie\\Desktop\\Nueva carpeta\\social-credit-bot\\Social-Credit-Bot.csproj",
       "packagesPath": "C:\\Users\\Winnie\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Winnie\\RiderProjects\\social-credit-bot\\obj\\",
+      "outputPath": "C:\\Users\\Winnie\\Desktop\\Nueva carpeta\\social-credit-bot\\obj\\",
       "projectStyle": "PackageReference",
-      "UsingMicrosoftNETSdk": false,
       "configFilePaths": [
         "C:\\Users\\Winnie\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
@@ -788,7 +787,8 @@
         "enableAudit": "true",
         "auditLevel": "low",
         "auditMode": "all"
-      }
+      },
+      "SdkAnalysisLevel": "9.0.100"
     },
     "frameworks": {
       "net9.0": {

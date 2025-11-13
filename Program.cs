@@ -43,6 +43,7 @@ class Bot
     private readonly int _dailyQuizReward_2;
     private readonly int _dailyQuizReward_3;
     private readonly decimal _retarRoundMultiplier;
+    private readonly decimal _weekendMultiplier;
     private string? _uploader = string.Empty;
     private HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private List<ulong> _revelarCorrectUsers = new List<ulong>();
@@ -57,6 +58,10 @@ class Bot
     private Puzzle? _activePuzzle = null;
     private readonly string _puzzlesPath;
     private readonly int _puzzleReward;
+
+    // Weekend multiplier system
+    private readonly Dictionary<ulong, string> _weekendMultiplierUsed = new Dictionary<ulong, string>(); // userId -> week identifier
+    private readonly string _weekendMultiplierPath;
 
     private class QuizState
     {
@@ -203,10 +208,12 @@ class Bot
         _rewardsFilePath = Path.Combine(dataDirectory, "rewards.csv");
         _votesFilePath = Path.Combine(dataDirectory, "votes.csv");
         _revelarLeaderboardPath = Path.Combine(dataDirectory, "revelar_leaderboard.json");
+        _weekendMultiplierPath = Path.Combine(dataDirectory, "weekend_multiplier.json");
         
         LoadQuizState();
         LoadVotes();
         LoadRetarChallenges();
+        LoadWeekendMultiplier();
         LoadPuzzles();
         CheckPuzzleExpiration(); // Check for expired puzzles on startup
         _client = new DiscordSocketClient(config);
@@ -264,6 +271,11 @@ class Bot
         if (!decimal.TryParse(Environment.GetEnvironmentVariable("RETAR_ROUND_MULTIPLIER"), out _retarRoundMultiplier))
         {
             _retarRoundMultiplier = 1.5m; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!decimal.TryParse(Environment.GetEnvironmentVariable("WEEKEND_MULTIPLIER"), out _weekendMultiplier))
+        {
+            _weekendMultiplier = 2.0m; // Default value if the environment variable is not set or invalid
         }
 
         var interactionService = new InteractionService(_client.Rest);
@@ -589,6 +601,105 @@ class Bot
         catch (Exception ex)
         {
             Console.WriteLine($"Error saving leaderboard: {ex.Message}");
+        }
+    }
+
+    // Weekend multiplier system methods
+    private string GetCurrentWeekIdentifier()
+    {
+        // Week runs from Monday 00:00:01 to next Monday 00:00:00
+        // Weekend is Friday 00:00 to Monday 00:00, which spans two calendar weeks
+        // We use the Monday that starts the week (the Monday after the weekend ends)
+        var now = DateTime.Now;
+        var dayOfWeek = (int)now.DayOfWeek;
+        
+        DateTime weekStart;
+        if (now.DayOfWeek == DayOfWeek.Monday && now.TimeOfDay < TimeSpan.FromSeconds(1))
+        {
+            // Monday 00:00:00 - still in weekend, use the Monday that just passed (previous week)
+            weekStart = now.Date.AddDays(-7);
+        }
+        else if (now.DayOfWeek == DayOfWeek.Friday || now.DayOfWeek == DayOfWeek.Saturday || now.DayOfWeek == DayOfWeek.Sunday)
+        {
+            // Friday-Sunday - weekend period, use the Monday that just passed (start of current week)
+            int daysFromMonday = (dayOfWeek + 6) % 7;
+            weekStart = now.AddDays(-daysFromMonday).Date;
+        }
+        else
+        {
+            // Regular weekday (Monday after 00:00:01, Tuesday, Wednesday, Thursday) - use Monday of current week
+            int daysFromMonday = (dayOfWeek + 6) % 7;
+            weekStart = now.AddDays(-daysFromMonday).Date;
+        }
+        
+        // Use ISO week format: YYYY-WW
+        var calendar = CultureInfo.CurrentCulture.Calendar;
+        int week = calendar.GetWeekOfYear(weekStart, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
+        return $"{weekStart.Year}-W{week:D2}";
+    }
+
+    private bool IsWeekend()
+    {
+        var now = DateTime.Now;
+        var dayOfWeek = now.DayOfWeek;
+        
+        // Weekend is from Friday 00:00 to Monday 00:00
+        if (dayOfWeek == DayOfWeek.Friday || dayOfWeek == DayOfWeek.Saturday || dayOfWeek == DayOfWeek.Sunday)
+        {
+            return true;
+        }
+        
+        // Monday 00:00:00 is still considered weekend (until 00:00:01)
+        if (dayOfWeek == DayOfWeek.Monday && now.TimeOfDay < TimeSpan.FromSeconds(1))
+        {
+            return true;
+        }
+        
+        return false;
+    }
+
+    private void LoadWeekendMultiplier()
+    {
+        try
+        {
+            if (!File.Exists(_weekendMultiplierPath))
+            {
+                _weekendMultiplierUsed.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_weekendMultiplierPath, Encoding.UTF8);
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, string>>(json);
+            if (data != null)
+            {
+                _weekendMultiplierUsed.Clear();
+                foreach (var kvp in data)
+                {
+                    _weekendMultiplierUsed[kvp.Key] = kvp.Value;
+                }
+            }
+            Console.WriteLine($"Loaded weekend multiplier data with {_weekendMultiplierUsed.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading weekend multiplier data: {ex.Message}");
+            _weekendMultiplierUsed.Clear();
+        }
+    }
+
+    private void SaveWeekendMultiplier()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_weekendMultiplierPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = System.Text.Json.JsonSerializer.Serialize(_weekendMultiplierUsed, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_weekendMultiplierPath, json, Encoding.UTF8);
+            Console.WriteLine($"Weekend multiplier data saved to {_weekendMultiplierPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving weekend multiplier data: {ex.Message}");
         }
     }
 
@@ -3139,16 +3250,40 @@ private void ScheduleDailyTask()
             }
 
             int reward;
-            if (_revelarCorrectUsers.Count == 0)
+            int position = _revelarCorrectUsers.Count; // 0 = first, 1 = second, 2 = third
+            if (position == 0)
                 reward = _dailyQuizReward_1;
-            else if (_revelarCorrectUsers.Count == 1)
+            else if (position == 1)
                 reward = _dailyQuizReward_2;
             else
                 reward = _dailyQuizReward_3;
 
+            // Check for weekend multiplier
+            bool appliedWeekendMultiplier = false;
+            if (IsWeekend())
+            {
+                string currentWeek = GetCurrentWeekIdentifier();
+                // Check if user has already used their weekly multiplier
+                if (!_weekendMultiplierUsed.ContainsKey(userId) || _weekendMultiplierUsed[userId] != currentWeek)
+                {
+                    // Apply weekend multiplier from environment variable
+                    reward = (int)Math.Round(reward * _weekendMultiplier, 0, MidpointRounding.AwayFromZero);
+                    appliedWeekendMultiplier = true;
+                    
+                    // Mark user as having used their weekly multiplier
+                    _weekendMultiplierUsed[userId] = currentWeek;
+                    SaveWeekendMultiplier();
+                }
+            }
+
             _revelarCorrectUsers.Add(userId);
 
-            await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
+            string responseMessage = $"<@{userId}> ¡Correcto! Has ganado {reward} créditos.";
+            if (appliedWeekendMultiplier)
+            {
+                responseMessage += $" 🎉 ¡Multiplicador de fin de semana x{_weekendMultiplier:0.##} aplicado!";
+            }
+            await command.RespondAsync(responseMessage);
 
             if (userId != 0)
             {
