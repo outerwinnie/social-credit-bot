@@ -63,6 +63,13 @@ class Bot
     private readonly Dictionary<ulong, string> _weekendMultiplierUsed = new Dictionary<ulong, string>(); // userId -> week identifier
     private readonly string _weekendMultiplierPath;
 
+    // Rain multiplier system
+    private readonly decimal _rainMultiplier;
+    private readonly Dictionary<ulong, string> _userCities = new Dictionary<ulong, string>(); // userId -> city name
+    private readonly Dictionary<ulong, string> _rainMultiplierUsed = new Dictionary<ulong, string>(); // userId -> date identifier (YYYY-MM-DD)
+    private readonly string _userCitiesPath;
+    private readonly string _rainMultiplierPath;
+
     private class QuizState
     {
         public string? Uploader { get; set; }
@@ -209,11 +216,15 @@ class Bot
         _votesFilePath = Path.Combine(dataDirectory, "votes.csv");
         _revelarLeaderboardPath = Path.Combine(dataDirectory, "revelar_leaderboard.json");
         _weekendMultiplierPath = Path.Combine(dataDirectory, "weekend_multiplier.json");
+        _userCitiesPath = Path.Combine(dataDirectory, "user_cities.json");
+        _rainMultiplierPath = Path.Combine(dataDirectory, "rain_multiplier.json");
         
         LoadQuizState();
         LoadVotes();
         LoadRetarChallenges();
         LoadWeekendMultiplier();
+        LoadUserCities();
+        LoadRainMultiplier();
         LoadPuzzles();
         CheckPuzzleExpiration(); // Check for expired puzzles on startup
         _client = new DiscordSocketClient(config);
@@ -276,6 +287,11 @@ class Bot
         if (!decimal.TryParse(Environment.GetEnvironmentVariable("WEEKEND_MULTIPLIER"), out _weekendMultiplier))
         {
             _weekendMultiplier = 2.0m; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!decimal.TryParse(Environment.GetEnvironmentVariable("RAIN_MULTIPLIER"), out _rainMultiplier))
+        {
+            _rainMultiplier = 1.5m; // Default value if the environment variable is not set or invalid
         }
 
         var interactionService = new InteractionService(_client.Rest);
@@ -701,6 +717,169 @@ class Bot
         {
             Console.WriteLine($"Error saving weekend multiplier data: {ex.Message}");
         }
+    }
+
+    // Rain multiplier system methods
+    private void LoadUserCities()
+    {
+        try
+        {
+            if (!File.Exists(_userCitiesPath))
+            {
+                _userCities.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_userCitiesPath, Encoding.UTF8);
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, string>>(json);
+            if (data != null)
+            {
+                _userCities.Clear();
+                foreach (var kvp in data)
+                {
+                    _userCities[kvp.Key] = kvp.Value;
+                }
+            }
+            Console.WriteLine($"Loaded user cities data with {_userCities.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user cities data: {ex.Message}");
+            _userCities.Clear();
+        }
+    }
+
+    private void SaveUserCities()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_userCitiesPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = System.Text.Json.JsonSerializer.Serialize(_userCities, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_userCitiesPath, json, Encoding.UTF8);
+            Console.WriteLine($"User cities data saved to {_userCitiesPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving user cities data: {ex.Message}");
+        }
+    }
+
+    private void LoadRainMultiplier()
+    {
+        try
+        {
+            if (!File.Exists(_rainMultiplierPath))
+            {
+                _rainMultiplierUsed.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_rainMultiplierPath, Encoding.UTF8);
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, string>>(json);
+            if (data != null)
+            {
+                _rainMultiplierUsed.Clear();
+                foreach (var kvp in data)
+                {
+                    _rainMultiplierUsed[kvp.Key] = kvp.Value;
+                }
+            }
+            Console.WriteLine($"Loaded rain multiplier data with {_rainMultiplierUsed.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading rain multiplier data: {ex.Message}");
+            _rainMultiplierUsed.Clear();
+        }
+    }
+
+    private void SaveRainMultiplier()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_rainMultiplierPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = System.Text.Json.JsonSerializer.Serialize(_rainMultiplierUsed, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_rainMultiplierPath, json, Encoding.UTF8);
+            Console.WriteLine($"Rain multiplier data saved to {_rainMultiplierPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving rain multiplier data: {ex.Message}");
+        }
+    }
+
+    private string GetCurrentDateIdentifier()
+    {
+        return DateTime.Now.ToString("yyyy-MM-dd");
+    }
+
+    private async Task<bool> IsRainingInCity(string cityName)
+    {
+        try
+        {
+            var apiKey = Environment.GetEnvironmentVariable("WEATHER_API_KEY");
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Console.WriteLine("WEATHER_API_KEY environment variable is not set.");
+                return false;
+            }
+
+            // Use OpenWeatherMap API
+            var encodedCity = Uri.EscapeDataString(cityName);
+            var url = $"https://api.openweathermap.org/data/2.5/weather?q={encodedCity}&appid={apiKey}&units=metric";
+            
+            using var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+            var response = await httpClient.GetAsync(url);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Weather API error: {response.StatusCode} for city {cityName}");
+                return false;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var weatherData = System.Text.Json.JsonSerializer.Deserialize<WeatherResponse>(json);
+            
+            if (weatherData?.Weather != null && weatherData.Weather.Length > 0)
+            {
+                // Check if any weather condition indicates rain
+                var main = weatherData.Weather[0].Main?.ToLower() ?? "";
+                var description = weatherData.Weather[0].Description?.ToLower() ?? "";
+                
+                // Rain conditions: Rain, Drizzle, Thunderstorm
+                bool isRaining = main.Contains("rain") || main.Contains("drizzle") || 
+                                main.Contains("thunderstorm") || description.Contains("rain") || 
+                                description.Contains("drizzle") || description.Contains("thunderstorm");
+                
+                Console.WriteLine($"Weather check for {cityName}: Main={main}, Description={description}, IsRaining={isRaining}");
+                return isRaining;
+            }
+            
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking weather for city {cityName}: {ex.Message}");
+            return false;
+        }
+    }
+
+    private class WeatherResponse
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("weather")]
+        public WeatherInfo[]? Weather { get; set; }
+    }
+
+    private class WeatherInfo
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("main")]
+        public string? Main { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("description")]
+        public string? Description { get; set; }
     }
 
     public async Task StartAsync()
@@ -1149,6 +1328,20 @@ class Bot
         await _client.Rest.CreateGuildCommand(puzzleGuildCommand, _guildId);
         Console.WriteLine("Slash command 'puzzle' registered for the guild.");
 
+        // City setting command for rain multiplier
+        var ciudadCommand = new SlashCommandBuilder()
+            .WithName("ciudad")
+            .WithDescription("Establece tu ciudad para el multiplicador de lluvia")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("nombre")
+                .WithDescription("Nombre de tu ciudad")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String));
+        
+        var ciudadGuildCommand = ciudadCommand.Build();
+        await _client.Rest.CreateGuildCommand(ciudadGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'ciudad' registered for the guild.");
+
     }
     
     private void ScheduleMonthlyRedistribution()
@@ -1565,6 +1758,10 @@ private void ScheduleDailyTask()
 
                 await command.RespondAsync($"✅ Tu puzzle ha sido enviado para aprobación. ID: `{puzzle.PuzzleId}`", ephemeral: true);
                 Console.WriteLine($"[PUZZLE] New puzzle created by {command.User.Username}: {puzzle.PuzzleId}");
+            }
+            else if (command.Data.Name == "ciudad")
+            {
+                await HandleCiudadCommand(command);
             }
         }
         
@@ -3188,6 +3385,29 @@ private void ScheduleDailyTask()
         await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
     }
 
+    private async Task HandleCiudadCommand(SocketSlashCommand command)
+    {
+        var nombreOption = command.Data.Options.FirstOrDefault(o => o.Name == "nombre");
+        if (nombreOption == null)
+        {
+            await command.RespondAsync("Debes proporcionar el nombre de tu ciudad.", ephemeral: true);
+            return;
+        }
+
+        var cityName = nombreOption.Value?.ToString()?.Trim();
+        if (string.IsNullOrEmpty(cityName))
+        {
+            await command.RespondAsync("El nombre de la ciudad no puede estar vacío.", ephemeral: true);
+            return;
+        }
+
+        var userId = command.User.Id;
+        _userCities[userId] = cityName;
+        SaveUserCities();
+
+        await command.RespondAsync($"✅ Tu ciudad ha sido establecida como: **{cityName}**. El multiplicador de lluvia se aplicará automáticamente cuando esté lloviendo en tu ciudad (una vez al día).", ephemeral: true);
+    }
+
     // Helper method to normalize text by removing accents
     private static string NormalizeText(string text)
     {
@@ -3276,12 +3496,40 @@ private void ScheduleDailyTask()
                 }
             }
 
+            // Check for rain multiplier
+            bool appliedRainMultiplier = false;
+            string currentDate = GetCurrentDateIdentifier();
+            if (_userCities.ContainsKey(userId))
+            {
+                string cityName = _userCities[userId];
+                // Check if user has already used their daily rain multiplier
+                if (!_rainMultiplierUsed.ContainsKey(userId) || _rainMultiplierUsed[userId] != currentDate)
+                {
+                    // Check if it's raining in the user's city
+                    bool isRaining = await IsRainingInCity(cityName);
+                    if (isRaining)
+                    {
+                        // Apply rain multiplier from environment variable
+                        reward = (int)Math.Round(reward * _rainMultiplier, 0, MidpointRounding.AwayFromZero);
+                        appliedRainMultiplier = true;
+                        
+                        // Mark user as having used their daily rain multiplier
+                        _rainMultiplierUsed[userId] = currentDate;
+                        SaveRainMultiplier();
+                    }
+                }
+            }
+
             _revelarCorrectUsers.Add(userId);
 
             string responseMessage = $"<@{userId}> ¡Correcto! Has ganado {reward} créditos.";
             if (appliedWeekendMultiplier)
             {
-                responseMessage += $"¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+                responseMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+            }
+            if (appliedRainMultiplier)
+            {
+                responseMessage += $" ¡Creditos x{_rainMultiplier:0.##} por lluvia!";
             }
             await command.RespondAsync(responseMessage);
 
@@ -3497,22 +3745,76 @@ private void ScheduleDailyTask()
             _activePuzzle.CorrectSolvers.Add(userId);
             
             // Give reward
+            int reward = _puzzleReward;
+            
+            // Check for weekend multiplier
+            bool appliedWeekendMultiplier = false;
+            if (IsWeekend())
+            {
+                string currentWeek = GetCurrentWeekIdentifier();
+                if (!_weekendMultiplierUsed.ContainsKey(userId) || _weekendMultiplierUsed[userId] != currentWeek)
+                {
+                    reward = (int)Math.Round(reward * _weekendMultiplier, 0, MidpointRounding.AwayFromZero);
+                    appliedWeekendMultiplier = true;
+                    _weekendMultiplierUsed[userId] = currentWeek;
+                    SaveWeekendMultiplier();
+                }
+            }
+            
+            // Check for rain multiplier
+            bool appliedRainMultiplier = false;
+            string currentDate = GetCurrentDateIdentifier();
+            if (_userCities.ContainsKey(userId))
+            {
+                string cityName = _userCities[userId];
+                if (!_rainMultiplierUsed.ContainsKey(userId) || _rainMultiplierUsed[userId] != currentDate)
+                {
+                    bool isRaining = await IsRainingInCity(cityName);
+                    if (isRaining)
+                    {
+                        reward = (int)Math.Round(reward * _rainMultiplier, 0, MidpointRounding.AwayFromZero);
+                        appliedRainMultiplier = true;
+                        _rainMultiplierUsed[userId] = currentDate;
+                        SaveRainMultiplier();
+                    }
+                }
+            }
+            
             LoadData();
             if (!_userReactionCounts.ContainsKey(userId))
                 _userReactionCounts[userId] = 0;
             
-            _userReactionCounts[userId] += _puzzleReward;
+            _userReactionCounts[userId] += reward;
             SaveData();
 
             var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
             var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
 
+            string rewardMessage = $"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {reward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)";
+            if (appliedWeekendMultiplier)
+            {
+                rewardMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+            }
+            if (appliedRainMultiplier)
+            {
+                rewardMessage += $" ¡Creditos x{_rainMultiplier:0.##} por lluvia!";
+            }
+            
             if (targetChannel != null)
             {
-                await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
+                await targetChannel.SendMessageAsync(rewardMessage);
             }
 
-            await command.RespondAsync($"🎉 ¡Correcto! Has ganado {_puzzleReward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)", ephemeral: true);
+            string userMessage = $"🎉 ¡Correcto! Has ganado {reward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)";
+            if (appliedWeekendMultiplier)
+            {
+                userMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+            }
+            if (appliedRainMultiplier)
+            {
+                userMessage += $" ¡Creditos x{_rainMultiplier:0.##} por lluvia!";
+            }
+            await command.RespondAsync(userMessage, ephemeral: true);
 
             // Check if puzzle is complete (3 solvers)
             if (_activePuzzle.CorrectSolvers.Count >= 3)
