@@ -622,8 +622,7 @@ class Bot
         Console.WriteLine($"MEME_PRICE: {_memePrice}");
         Console.WriteLine($"REACTION_INCREMENT: {_reactionIncrement}");
         
-        ScheduleMonthlyRedistribution(int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
-        Console.WriteLine($"CREDIT_PERCENTAGE:" + int.Parse(Environment.GetEnvironmentVariable("CREDIT_PERCENTAGE") ?? throw new InvalidOperationException()));
+        ScheduleMonthlyRedistribution();
         
         // Schedule challenge cleanup every hour
         ScheduleChallengeCleanup();
@@ -1027,7 +1026,7 @@ class Bot
 
     }
     
-    private void ScheduleMonthlyRedistribution(decimal percentage)
+    private void ScheduleMonthlyRedistribution()
     {
         Task.Run(async () =>
         {
