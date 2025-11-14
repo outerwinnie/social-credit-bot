@@ -1977,6 +1977,7 @@ private void ScheduleDailyTask()
             Console.WriteLine($"[RETAR] Challenge accepted: {challengeId}");
 
             // Trigger image after sending the acceptance message to ensure ordering
+            await Task.Delay(300);
             var imageUploader = await SendRetarImageAsync();
             challenge.CorrectAnswer = imageUploader; // Store the correct answer
             SaveRetarChallenges();
@@ -2143,6 +2144,7 @@ private void ScheduleDailyTask()
             Console.WriteLine($"[RETAR] Round {challenge.CurrentRound} started for challenge {challengeId}");
 
             // Trigger image after sending the round message to ensure ordering
+            await Task.Delay(300);
             var newImageUploader = await SendRetarImageAsync();
             challenge.CorrectAnswer = newImageUploader;
             SaveRetarChallenges();
@@ -2252,6 +2254,7 @@ private void ScheduleDailyTask()
             Console.WriteLine($"[RETAR] Round {challenge.CurrentRound} started for challenge {challengeId}");
 
             // Trigger image after sending the round message to ensure ordering
+            await Task.Delay(300);
             var newImageUploader = await SendRetarImageAsync();
             challenge.CorrectAnswer = newImageUploader;
             SaveRetarChallenges();
