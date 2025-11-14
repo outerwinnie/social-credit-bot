@@ -2966,6 +2966,13 @@ private void ScheduleDailyTask()
             return;
         }
 
+        // Block for everyone while any duel is active
+        if (_activeRetarChallenges.Values.Any(c => c.IsAccepted && !c.IsCompleted))
+        {
+            await command.RespondAsync("'Recuerdate' está bloqueado mientras haya un duelo activo. Terminen el duelo primero.", ephemeral: true);
+            return;
+        }
+
         var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
         
         // Default multiplier is 1 if "cantidad" is not provided or invalid
@@ -3026,6 +3033,13 @@ private void ScheduleDailyTask()
 
     private async Task HandleMemeUsar(SocketSlashCommand command)
     {
+        // Block for everyone while any duel is active
+        if (_activeRetarChallenges.Values.Any(c => c.IsAccepted && !c.IsCompleted))
+        {
+            await command.RespondAsync("'Meme' está bloqueado mientras haya un duelo activo. Terminen el duelo primero.", ephemeral: true);
+            return;
+        }
+
         var amountOption = command.Data.Options.FirstOrDefault(o => o.Name == "cantidad");
         
         // Default multiplier is 1 if "cantidad" is not provided or invalid
@@ -3086,6 +3100,13 @@ private void ScheduleDailyTask()
 
     private async Task HandlePreguntarUsar(SocketSlashCommand command)
     {
+        // Block for everyone while any duel is active
+        if (_activeRetarChallenges.Values.Any(c => c.IsAccepted && !c.IsCompleted))
+        {
+            await command.RespondAsync("'Preguntar' está bloqueado mientras haya un duelo activo. Terminen el duelo primero.", ephemeral: true);
+            return;
+        }
+
         var userOption = command.Data.Options.FirstOrDefault(o => o.Name == "usuario");
         var preguntaOption = command.Data.Options.FirstOrDefault(o => o.Name == "pregunta");
 
