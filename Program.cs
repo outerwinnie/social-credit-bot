@@ -1956,11 +1956,6 @@ private void ScheduleDailyTask()
 
         try
         {
-            // Send image for the challenge
-            var imageUploader = await SendRetarImageAsync();
-            challenge.CorrectAnswer = imageUploader; // Store the correct answer
-            SaveRetarChallenges();
-
             var embed = new EmbedBuilder()
                 .WithTitle("🎯 ¡Reto Aceptado!")
                 .WithDescription($"<@{challenge.ChallengedId}> ha aceptado el reto de <@{challenge.ChallengerId}>!")
@@ -1980,6 +1975,11 @@ private void ScheduleDailyTask()
 
             await message.Channel.SendMessageAsync(embed: embed);
             Console.WriteLine($"[RETAR] Challenge accepted: {challengeId}");
+
+            // Trigger image after sending the acceptance message to ensure ordering
+            var imageUploader = await SendRetarImageAsync();
+            challenge.CorrectAnswer = imageUploader; // Store the correct answer
+            SaveRetarChallenges();
         }
         catch (Exception ex)
         {
@@ -2128,11 +2128,6 @@ private void ScheduleDailyTask()
         
         try
         {
-            // Get new image for next round
-            var newImageUploader = await SendRetarImageAsync();
-            challenge.CorrectAnswer = newImageUploader;
-            SaveRetarChallenges();
-
             var embed = new EmbedBuilder()
                 .WithTitle($"🔄 Ronda {challenge.CurrentRound}")
                 .WithDescription($"{reason}. ¡Nueva ronda!")
@@ -2146,6 +2141,11 @@ private void ScheduleDailyTask()
 
             await message.Channel.SendMessageAsync(embed: embed);
             Console.WriteLine($"[RETAR] Round {challenge.CurrentRound} started for challenge {challengeId}");
+
+            // Trigger image after sending the round message to ensure ordering
+            var newImageUploader = await SendRetarImageAsync();
+            challenge.CorrectAnswer = newImageUploader;
+            SaveRetarChallenges();
         }
         catch (Exception ex)
         {
@@ -2237,11 +2237,6 @@ private void ScheduleDailyTask()
         
         try
         {
-            // Get new image for next round
-            var newImageUploader = await SendRetarImageAsync();
-            challenge.CorrectAnswer = newImageUploader;
-            SaveRetarChallenges();
-
             var embed = new EmbedBuilder()
                 .WithTitle($"🔄 Ronda {challenge.CurrentRound}")
                 .WithDescription($"{reason}. ¡Nueva ronda!")
@@ -2255,6 +2250,11 @@ private void ScheduleDailyTask()
 
             await channel.SendMessageAsync(embed: embed);
             Console.WriteLine($"[RETAR] Round {challenge.CurrentRound} started for challenge {challengeId}");
+
+            // Trigger image after sending the round message to ensure ordering
+            var newImageUploader = await SendRetarImageAsync();
+            challenge.CorrectAnswer = newImageUploader;
+            SaveRetarChallenges();
         }
         catch (Exception ex)
         {
