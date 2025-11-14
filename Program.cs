@@ -1429,6 +1429,13 @@ private void ScheduleDailyTask()
                 Console.WriteLine($"Executing daily task: SendPostRequestAsync with reward '{_dailyTaskReward}'");
                 if (!IsQuizFreezePeriod())
                 {
+                    // If a duel is active, postpone until it finishes
+                    while (_activeRetarChallenges.Values.Any(c => c.IsAccepted && !c.IsCompleted))
+                    {
+                        Console.WriteLine("Daily task postponed: active duel detected. Waiting 60s...");
+                        await Task.Delay(TimeSpan.FromSeconds(60));
+                    }
+
                     await SendPostRequestAsync(_dailyTaskReward);
                 }
                 else
