@@ -24,7 +24,6 @@ class Bot
     private readonly DiscordSocketClient _client;
     private readonly string _csvFilePath;
     private readonly string _ignoredUsersFilePath;
-    private readonly string _rewardsFilePath;
     private readonly Dictionary<ulong, int> _userReactionCounts = new Dictionary<ulong, int>();
     private readonly Dictionary<ulong, HashSet<ulong>> _userMessageReactions = new Dictionary<ulong, HashSet<ulong>>(); // Dictionary to track reactions
     private readonly HashSet<ulong> _ignoredUsers = new HashSet<ulong>(); // Track ignored users
@@ -43,6 +42,7 @@ class Bot
     private readonly int _dailyQuizReward_2;
     private readonly int _dailyQuizReward_3;
     private readonly decimal _retarRoundMultiplier;
+    private readonly decimal _weekendMultiplier;
     private string? _uploader = string.Empty;
     private HashSet<ulong> _revelarTriedUsers = new HashSet<ulong>();
     private List<ulong> _revelarCorrectUsers = new List<ulong>();
@@ -57,6 +57,17 @@ class Bot
     private Puzzle? _activePuzzle = null;
     private readonly string _puzzlesPath;
     private readonly int _puzzleReward;
+
+    // Weekend multiplier system
+    private readonly Dictionary<ulong, string> _weekendMultiplierUsed = new Dictionary<ulong, string>(); // userId -> week identifier
+    private readonly string _weekendMultiplierPath;
+
+    // Rain multiplier system
+    private readonly decimal _rainMultiplier;
+    private readonly Dictionary<ulong, string> _userCities = new Dictionary<ulong, string>(); // userId -> city name
+    private readonly Dictionary<ulong, string> _rainMultiplierUsed = new Dictionary<ulong, string>(); // userId -> date identifier (YYYY-MM-DD)
+    private readonly string _userCitiesPath;
+    private readonly string _rainMultiplierPath;
 
     private class QuizState
     {
@@ -200,13 +211,18 @@ class Bot
         _puzzlesPath = Path.Combine(dataDirectory, "puzzles.json");
         _csvFilePath = Path.Combine(dataDirectory, "user_reactions.csv");
         _ignoredUsersFilePath = Path.Combine(dataDirectory, "ignored_users.csv");
-        _rewardsFilePath = Path.Combine(dataDirectory, "rewards.csv");
         _votesFilePath = Path.Combine(dataDirectory, "votes.csv");
         _revelarLeaderboardPath = Path.Combine(dataDirectory, "revelar_leaderboard.json");
+        _weekendMultiplierPath = Path.Combine(dataDirectory, "weekend_multiplier.json");
+        _userCitiesPath = Path.Combine(dataDirectory, "user_cities.json");
+        _rainMultiplierPath = Path.Combine(dataDirectory, "rain_multiplier.json");
         
         LoadQuizState();
         LoadVotes();
         LoadRetarChallenges();
+        LoadWeekendMultiplier();
+        LoadUserCities();
+        LoadRainMultiplier();
         LoadPuzzles();
         CheckPuzzleExpiration(); // Check for expired puzzles on startup
         _client = new DiscordSocketClient(config);
@@ -264,6 +280,16 @@ class Bot
         if (!decimal.TryParse(Environment.GetEnvironmentVariable("RETAR_ROUND_MULTIPLIER"), out _retarRoundMultiplier))
         {
             _retarRoundMultiplier = 1.5m; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!decimal.TryParse(Environment.GetEnvironmentVariable("WEEKEND_MULTIPLIER"), out _weekendMultiplier))
+        {
+            _weekendMultiplier = 2.0m; // Default value if the environment variable is not set or invalid
+        }
+
+        if (!decimal.TryParse(Environment.GetEnvironmentVariable("RAIN_MULTIPLIER"), out _rainMultiplier))
+        {
+            _rainMultiplier = 1.5m; // Default value if the environment variable is not set or invalid
         }
 
         var interactionService = new InteractionService(_client.Rest);
@@ -592,6 +618,268 @@ class Bot
         }
     }
 
+    // Weekend multiplier system methods
+    private string GetCurrentWeekIdentifier()
+    {
+        // Week runs from Monday 00:00:01 to next Monday 00:00:00
+        // Weekend is Friday 00:00 to Monday 00:00, which spans two calendar weeks
+        // We use the Monday that starts the week (the Monday after the weekend ends)
+        var now = DateTime.Now;
+        var dayOfWeek = (int)now.DayOfWeek;
+        
+        DateTime weekStart;
+        if (now.DayOfWeek == DayOfWeek.Monday && now.TimeOfDay < TimeSpan.FromSeconds(1))
+        {
+            // Monday 00:00:00 - still in weekend, use the Monday that just passed (previous week)
+            weekStart = now.Date.AddDays(-7);
+        }
+        else if (now.DayOfWeek == DayOfWeek.Friday || now.DayOfWeek == DayOfWeek.Saturday || now.DayOfWeek == DayOfWeek.Sunday)
+        {
+            // Friday-Sunday - weekend period, use the Monday that just passed (start of current week)
+            int daysFromMonday = (dayOfWeek + 6) % 7;
+            weekStart = now.AddDays(-daysFromMonday).Date;
+        }
+        else
+        {
+            // Regular weekday (Monday after 00:00:01, Tuesday, Wednesday, Thursday) - use Monday of current week
+            int daysFromMonday = (dayOfWeek + 6) % 7;
+            weekStart = now.AddDays(-daysFromMonday).Date;
+        }
+        
+        // Use ISO week format: YYYY-WW
+        var calendar = CultureInfo.CurrentCulture.Calendar;
+        int week = calendar.GetWeekOfYear(weekStart, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
+        return $"{weekStart.Year}-W{week:D2}";
+    }
+
+    private bool IsWeekend()
+    {
+        var now = DateTime.Now;
+        var dayOfWeek = now.DayOfWeek;
+        
+        // Weekend is from Friday 00:00 to Monday 00:00
+        if (dayOfWeek == DayOfWeek.Friday || dayOfWeek == DayOfWeek.Saturday || dayOfWeek == DayOfWeek.Sunday)
+        {
+            return true;
+        }
+        
+        // Monday 00:00:00 is still considered weekend (until 00:00:01)
+        if (dayOfWeek == DayOfWeek.Monday && now.TimeOfDay < TimeSpan.FromSeconds(1))
+        {
+            return true;
+        }
+        
+        return false;
+    }
+
+    private void LoadWeekendMultiplier()
+    {
+        try
+        {
+            if (!File.Exists(_weekendMultiplierPath))
+            {
+                _weekendMultiplierUsed.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_weekendMultiplierPath, Encoding.UTF8);
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, string>>(json);
+            if (data != null)
+            {
+                _weekendMultiplierUsed.Clear();
+                foreach (var kvp in data)
+                {
+                    _weekendMultiplierUsed[kvp.Key] = kvp.Value;
+                }
+            }
+            Console.WriteLine($"Loaded weekend multiplier data with {_weekendMultiplierUsed.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading weekend multiplier data: {ex.Message}");
+            _weekendMultiplierUsed.Clear();
+        }
+    }
+
+    private void SaveWeekendMultiplier()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_weekendMultiplierPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = System.Text.Json.JsonSerializer.Serialize(_weekendMultiplierUsed, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_weekendMultiplierPath, json, Encoding.UTF8);
+            Console.WriteLine($"Weekend multiplier data saved to {_weekendMultiplierPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving weekend multiplier data: {ex.Message}");
+        }
+    }
+
+    // Rain multiplier system methods
+    private void LoadUserCities()
+    {
+        try
+        {
+            if (!File.Exists(_userCitiesPath))
+            {
+                _userCities.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_userCitiesPath, Encoding.UTF8);
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, string>>(json);
+            if (data != null)
+            {
+                _userCities.Clear();
+                foreach (var kvp in data)
+                {
+                    _userCities[kvp.Key] = kvp.Value;
+                }
+            }
+            Console.WriteLine($"Loaded user cities data with {_userCities.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user cities data: {ex.Message}");
+            _userCities.Clear();
+        }
+    }
+
+    private void SaveUserCities()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_userCitiesPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = System.Text.Json.JsonSerializer.Serialize(_userCities, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_userCitiesPath, json, Encoding.UTF8);
+            Console.WriteLine($"User cities data saved to {_userCitiesPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving user cities data: {ex.Message}");
+        }
+    }
+
+    private void LoadRainMultiplier()
+    {
+        try
+        {
+            if (!File.Exists(_rainMultiplierPath))
+            {
+                _rainMultiplierUsed.Clear();
+                return;
+            }
+            var json = File.ReadAllText(_rainMultiplierPath, Encoding.UTF8);
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<ulong, string>>(json);
+            if (data != null)
+            {
+                _rainMultiplierUsed.Clear();
+                foreach (var kvp in data)
+                {
+                    _rainMultiplierUsed[kvp.Key] = kvp.Value;
+                }
+            }
+            Console.WriteLine($"Loaded rain multiplier data with {_rainMultiplierUsed.Count} entries.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading rain multiplier data: {ex.Message}");
+            _rainMultiplierUsed.Clear();
+        }
+    }
+
+    private void SaveRainMultiplier()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(_rainMultiplierPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = System.Text.Json.JsonSerializer.Serialize(_rainMultiplierUsed, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_rainMultiplierPath, json, Encoding.UTF8);
+            Console.WriteLine($"Rain multiplier data saved to {_rainMultiplierPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving rain multiplier data: {ex.Message}");
+        }
+    }
+
+    private string GetCurrentDateIdentifier()
+    {
+        return DateTime.Now.ToString("yyyy-MM-dd");
+    }
+
+    private async Task<bool> IsRainingInCity(string cityName)
+    {
+        try
+        {
+            var apiKey = Environment.GetEnvironmentVariable("WEATHER_API_KEY");
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Console.WriteLine("WEATHER_API_KEY environment variable is not set.");
+                return false;
+            }
+
+            // Use OpenWeatherMap API
+            var encodedCity = Uri.EscapeDataString(cityName);
+            var url = $"https://api.openweathermap.org/data/2.5/weather?q={encodedCity}&appid={apiKey}&units=metric";
+            
+            using var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+            var response = await httpClient.GetAsync(url);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Weather API error: {response.StatusCode} for city {cityName}");
+                return false;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var weatherData = System.Text.Json.JsonSerializer.Deserialize<WeatherResponse>(json);
+            
+            if (weatherData?.Weather != null && weatherData.Weather.Length > 0)
+            {
+                // Check if any weather condition indicates rain
+                var main = weatherData.Weather[0].Main?.ToLower() ?? "";
+                var description = weatherData.Weather[0].Description?.ToLower() ?? "";
+                
+                // Rain conditions: Rain, Drizzle, Thunderstorm
+                bool isRaining = main.Contains("rain") || main.Contains("drizzle") || 
+                                main.Contains("thunderstorm") || description.Contains("rain") || 
+                                description.Contains("drizzle") || description.Contains("thunderstorm");
+                
+                Console.WriteLine($"Weather check for {cityName}: Main={main}, Description={description}, IsRaining={isRaining}");
+                return isRaining;
+            }
+            
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking weather for city {cityName}: {ex.Message}");
+            return false;
+        }
+    }
+
+    private class WeatherResponse
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("weather")]
+        public WeatherInfo[]? Weather { get; set; }
+    }
+
+    private class WeatherInfo
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("main")]
+        public string? Main { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("description")]
+        public string? Description { get; set; }
+    }
+
     public async Task StartAsync()
     {
         _client.Log += LogAsync;
@@ -614,7 +902,6 @@ class Bot
         // Load existing data and ignored users from CSV files
         LoadData();
         LoadIgnoredUsers();
-        CreateRewardsFileIfNotExists();
 
         Console.WriteLine("Bot is running...");
         Console.WriteLine($"RECUERDATE_PRICE: {_recuerdatePrice}");
@@ -1038,6 +1325,20 @@ class Bot
         await _client.Rest.CreateGuildCommand(puzzleGuildCommand, _guildId);
         Console.WriteLine("Slash command 'puzzle' registered for the guild.");
 
+        // City setting command for rain multiplier
+        var ciudadCommand = new SlashCommandBuilder()
+            .WithName("ciudad")
+            .WithDescription("Establece tu ciudad para el multiplicador de lluvia")
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("nombre")
+                .WithDescription("Nombre de tu ciudad")
+                .WithRequired(true)
+                .WithType(ApplicationCommandOptionType.String));
+        
+        var ciudadGuildCommand = ciudadCommand.Build();
+        await _client.Rest.CreateGuildCommand(ciudadGuildCommand, _guildId);
+        Console.WriteLine("Slash command 'ciudad' registered for the guild.");
+
     }
     
     private void ScheduleMonthlyRedistribution()
@@ -1454,6 +1755,10 @@ private void ScheduleDailyTask()
 
                 await command.RespondAsync($"✅ Tu puzzle ha sido enviado para aprobación. ID: `{puzzle.PuzzleId}`", ephemeral: true);
                 Console.WriteLine($"[PUZZLE] New puzzle created by {command.User.Username}: {puzzle.PuzzleId}");
+            }
+            else if (command.Data.Name == "ciudad")
+            {
+                await HandleCiudadCommand(command);
             }
         }
         
@@ -2488,56 +2793,6 @@ private void ScheduleDailyTask()
         }
     }
 
-    private void CreateRewardsFileIfNotExists()
-    {
-        if (!File.Exists(_rewardsFilePath))
-        {
-            using var writer = new StreamWriter(_rewardsFilePath);
-            writer.WriteLine("RewardName,Quantity");
-            Console.WriteLine("Rewards CSV file created.");
-        }
-    }
-
-    private void WriteRewardToCsv(string rewardName, int quantity)
-    {
-        try
-        {
-            var rewards = new List<Reward>();
-            if (File.Exists(_rewardsFilePath))
-            {
-                using var reader = new StreamReader(_rewardsFilePath);
-                using var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture));
-                csvReader.Context.RegisterClassMap<RewardMap>();
-                rewards = csvReader.GetRecords<Reward>().ToList();
-            }
-
-            var existingReward = rewards.FirstOrDefault(r => r.RewardName == rewardName);
-            if (existingReward != null)
-            {
-                existingReward.Quantity += quantity;
-            }
-            else
-            {
-                rewards.Add(new Reward
-                {
-                    RewardName = rewardName,
-                    Quantity = quantity
-                });
-            }
-
-            using var writer = new StreamWriter(_rewardsFilePath);
-            using var csvWriter = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture));
-            csvWriter.Context.RegisterClassMap<RewardMap>();
-            csvWriter.WriteRecords(rewards);
-
-            Console.WriteLine($"Reward '{rewardName}' updated in CSV. New quantity: {existingReward?.Quantity ?? quantity}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error writing reward to CSV: {ex.Message}");
-        }
-    }
-
     // Admin command handlers
     private async Task HandleAddCreditsAdmin(SocketSlashCommand command)
     {
@@ -2696,7 +2951,7 @@ private void ScheduleDailyTask()
         _activePuzzle = null;
         SavePuzzles();
 
-        await command.RespondAsync("✅ Puzzle finalizado exitosamente.", ephemeral: true);
+        await command.RespondAsync("Puzzle finalizado exitosamente.", ephemeral: true);
     }
 
     // Helper methods for /usar subcommands
@@ -2704,7 +2959,7 @@ private void ScheduleDailyTask()
     {
         if (IsQuizFreezePeriod())
         {
-            await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+            await command.RespondAsync("El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
             return;
         }
 
@@ -2941,7 +3196,7 @@ private void ScheduleDailyTask()
         var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
         if (targetChannel != null)
         {
-            await targetChannel.SendMessageAsync($":gift: <@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
+            await targetChannel.SendMessageAsync($"<@{senderId}> ha regalado {amount} créditos a <@{recipientId}>!");
         }
 
         Console.WriteLine($"[REGALAR] {senderId} -> {recipientId} : {amount} créditos");
@@ -3077,6 +3332,29 @@ private void ScheduleDailyTask()
         await command.RespondAsync($"Posees {reactionsReceived} créditos.", ephemeral: true);
     }
 
+    private async Task HandleCiudadCommand(SocketSlashCommand command)
+    {
+        var nombreOption = command.Data.Options.FirstOrDefault(o => o.Name == "nombre");
+        if (nombreOption == null)
+        {
+            await command.RespondAsync("Debes proporcionar el nombre de tu ciudad.", ephemeral: true);
+            return;
+        }
+
+        var cityName = nombreOption.Value?.ToString()?.Trim();
+        if (string.IsNullOrEmpty(cityName))
+        {
+            await command.RespondAsync("El nombre de la ciudad no puede estar vacío.", ephemeral: true);
+            return;
+        }
+
+        var userId = command.User.Id;
+        _userCities[userId] = cityName;
+        SaveUserCities();
+
+        await command.RespondAsync($"Tu ciudad ha sido establecida como: **{cityName}**. El multiplicador de lluvia se aplicará automáticamente cuando esté lloviendo en tu ciudad (una vez al día).", ephemeral: true);
+    }
+
     // Helper method to normalize text by removing accents
     private static string NormalizeText(string text)
     {
@@ -3107,7 +3385,7 @@ private void ScheduleDailyTask()
         
         if (IsQuizFreezePeriod())
         {
-            await command.RespondAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
+            await command.RespondAsync("El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.", ephemeral: true);
             return;
         }
 
@@ -3139,16 +3417,68 @@ private void ScheduleDailyTask()
             }
 
             int reward;
-            if (_revelarCorrectUsers.Count == 0)
+            int position = _revelarCorrectUsers.Count; // 0 = first, 1 = second, 2 = third
+            if (position == 0)
                 reward = _dailyQuizReward_1;
-            else if (_revelarCorrectUsers.Count == 1)
+            else if (position == 1)
                 reward = _dailyQuizReward_2;
             else
                 reward = _dailyQuizReward_3;
 
+            // Check for weekend multiplier
+            bool appliedWeekendMultiplier = false;
+            if (IsWeekend())
+            {
+                string currentWeek = GetCurrentWeekIdentifier();
+                // Check if user has already used their weekly multiplier
+                if (!_weekendMultiplierUsed.ContainsKey(userId) || _weekendMultiplierUsed[userId] != currentWeek)
+                {
+                    // Apply weekend multiplier from environment variable
+                    reward = (int)Math.Round(reward * _weekendMultiplier, 0, MidpointRounding.AwayFromZero);
+                    appliedWeekendMultiplier = true;
+                    
+                    // Mark user as having used their weekly multiplier
+                    _weekendMultiplierUsed[userId] = currentWeek;
+                    SaveWeekendMultiplier();
+                }
+            }
+
+            // Check for rain multiplier
+            bool appliedRainMultiplier = false;
+            string currentDate = GetCurrentDateIdentifier();
+            if (_userCities.ContainsKey(userId))
+            {
+                string cityName = _userCities[userId];
+                // Check if user has already used their daily rain multiplier
+                if (!_rainMultiplierUsed.ContainsKey(userId) || _rainMultiplierUsed[userId] != currentDate)
+                {
+                    // Check if it's raining in the user's city
+                    bool isRaining = await IsRainingInCity(cityName);
+                    if (isRaining)
+                    {
+                        // Apply rain multiplier from environment variable
+                        reward = (int)Math.Round(reward * _rainMultiplier, 0, MidpointRounding.AwayFromZero);
+                        appliedRainMultiplier = true;
+                        
+                        // Mark user as having used their daily rain multiplier
+                        _rainMultiplierUsed[userId] = currentDate;
+                        SaveRainMultiplier();
+                    }
+                }
+            }
+
             _revelarCorrectUsers.Add(userId);
 
-            await command.RespondAsync($"<@{userId}> ¡Correcto! Has ganado {reward} créditos.");
+            string responseMessage = $"<@{userId}> ¡Correcto! Has ganado {reward} créditos.";
+            if (appliedWeekendMultiplier)
+            {
+                responseMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+            }
+            if (appliedRainMultiplier)
+            {
+                responseMessage += $" ¡Creditos x{_rainMultiplier:0.##} por lluvia!";
+            }
+            await command.RespondAsync(responseMessage);
 
             if (userId != 0)
             {
@@ -3178,7 +3508,7 @@ private void ScheduleDailyTask()
                 var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
                 if (targetChannel != null)
                 {
-                    await targetChannel.SendMessageAsync($":tada: ¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
+                    await targetChannel.SendMessageAsync($"¡Se han alcanzado 3 ganadores! La respuesta correcta era: \"{_uploader}\". Comienza una nueva ronda...");
                 }
                 if (!IsQuizFreezePeriod())
                 {
@@ -3188,7 +3518,7 @@ private void ScheduleDailyTask()
                 {
                     if (targetChannel != null)
                     {
-                        await targetChannel.SendMessageAsync(":snowflake: El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
+                        await targetChannel.SendMessageAsync("El juego volvera mañana. No se pueden enviar nuevas imágenes. Ahora es el turno de las votaciones.");
                     }
                 }
                 SaveQuizState(); // Save after new round/image
@@ -3236,7 +3566,7 @@ private void ScheduleDailyTask()
         challenge.RoundGuesses[challenge.CurrentRound][userId] = guessedUsername;
         SaveRetarChallenges();
 
-        await command.RespondAsync($"📝 Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
+        await command.RespondAsync($"Respuesta enviada para la Ronda {challenge.CurrentRound}.", ephemeral: true);
 
         // Send notification to channel
         var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
@@ -3362,22 +3692,76 @@ private void ScheduleDailyTask()
             _activePuzzle.CorrectSolvers.Add(userId);
             
             // Give reward
+            int reward = _puzzleReward;
+            
+            // Check for weekend multiplier
+            bool appliedWeekendMultiplier = false;
+            if (IsWeekend())
+            {
+                string currentWeek = GetCurrentWeekIdentifier();
+                if (!_weekendMultiplierUsed.ContainsKey(userId) || _weekendMultiplierUsed[userId] != currentWeek)
+                {
+                    reward = (int)Math.Round(reward * _weekendMultiplier, 0, MidpointRounding.AwayFromZero);
+                    appliedWeekendMultiplier = true;
+                    _weekendMultiplierUsed[userId] = currentWeek;
+                    SaveWeekendMultiplier();
+                }
+            }
+            
+            // Check for rain multiplier
+            bool appliedRainMultiplier = false;
+            string currentDate = GetCurrentDateIdentifier();
+            if (_userCities.ContainsKey(userId))
+            {
+                string cityName = _userCities[userId];
+                if (!_rainMultiplierUsed.ContainsKey(userId) || _rainMultiplierUsed[userId] != currentDate)
+                {
+                    bool isRaining = await IsRainingInCity(cityName);
+                    if (isRaining)
+                    {
+                        reward = (int)Math.Round(reward * _rainMultiplier, 0, MidpointRounding.AwayFromZero);
+                        appliedRainMultiplier = true;
+                        _rainMultiplierUsed[userId] = currentDate;
+                        SaveRainMultiplier();
+                    }
+                }
+            }
+            
             LoadData();
             if (!_userReactionCounts.ContainsKey(userId))
                 _userReactionCounts[userId] = 0;
             
-            _userReactionCounts[userId] += _puzzleReward;
+            _userReactionCounts[userId] += reward;
             SaveData();
 
             var channelId = ulong.Parse(Environment.GetEnvironmentVariable("TARGET_CHANNEL_ID") ?? "");
             var targetChannel = _client.GetChannel(channelId) as IMessageChannel;
 
+            string rewardMessage = $"<@{userId}> ha resuelto el puzzle correctamente y ganado {reward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)";
+            if (appliedWeekendMultiplier)
+            {
+                rewardMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+            }
+            if (appliedRainMultiplier)
+            {
+                rewardMessage += $" ¡Creditos x{_rainMultiplier:0.##} por lluvia!";
+            }
+            
             if (targetChannel != null)
             {
-                await targetChannel.SendMessageAsync($"🎉 <@{userId}> ha resuelto el puzzle correctamente y ganado {_puzzleReward} créditos! ({_activePuzzle.CorrectSolvers.Count}/3)");
+                await targetChannel.SendMessageAsync(rewardMessage);
             }
 
-            await command.RespondAsync($"🎉 ¡Correcto! Has ganado {_puzzleReward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)", ephemeral: true);
+            string userMessage = $"¡Correcto! Has ganado {reward} créditos. ({_activePuzzle.CorrectSolvers.Count}/3)";
+            if (appliedWeekendMultiplier)
+            {
+                userMessage += $" ¡Creditos x{_weekendMultiplier:0.##} por fin de semana!";
+            }
+            if (appliedRainMultiplier)
+            {
+                userMessage += $" ¡Creditos x{_rainMultiplier:0.##} por lluvia!";
+            }
+            await command.RespondAsync(userMessage, ephemeral: true);
 
             // Check if puzzle is complete (3 solvers)
             if (_activePuzzle.CorrectSolvers.Count >= 3)
@@ -3457,7 +3841,7 @@ private void ScheduleDailyTask()
         }
         else
         {
-            await command.RespondAsync($"❌ <@{userId}> Respuesta incorrecta.", ephemeral: false);
+            await command.RespondAsync($"<@{userId}> Respuesta incorrecta.", ephemeral: false);
         }
 
         SavePuzzles();
@@ -3465,21 +3849,6 @@ private void ScheduleDailyTask()
 }
 
 // Helper classes and mappings
-class Reward
-{
-    public string RewardName { get; set; }
-    public int Quantity { get; set; }
-}
-
-class RewardMap : ClassMap<Reward>
-{
-    public RewardMap()
-    {
-        Map(m => m.RewardName).Name("RewardName");
-        Map(m => m.Quantity).Name("Quantity");
-    }
-}
-
 // Define a class to represent the CSV record for reactions
 public class ReactionLog
 {
